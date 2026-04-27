@@ -2,7 +2,8 @@
 
 > **Project**: In-Car Multi-Speaker Automatic Speech Recognition  
 > **Dataset**: AISHELL-5 (4-channel, Mandarin Chinese)  
-> **Stack**: Python 3.10 · PyTorch · SpeechBrain · OpenAI Whisper · Asteroid · Streamlit
+> **Stack**: Python 3.10 · PyTorch · SpeechBrain · OpenAI Whisper · Asteroid · Streamlit  
+> **Last updated**: 2026-04-27 (Phase 2 improvements)
 
 ---
 
@@ -14,12 +15,15 @@ The architecture follows a **sequential modular pipeline** pattern with lazy-loa
 
 Key design decisions:
 - **Lazy instantiation** — heavy models (Whisper, SepFormer, ECAPA-TDNN) are loaded on first use, enabling fast startup for Streamlit demos.
-- **Device-aware routing** — a `get_separator()` factory dispatches to `SepFormer` (GPU) or `ChannelSelectSeparator`/`ICASeparator` (CPU) at runtime.
+- **Device-aware routing** — a `get_separator()` factory dispatches to `SepFormer` (GPU), `ChannelSelectSeparator`/`ICASeparator` (CPU), or `BeamformSeparator` (MVDR, CPU multi-channel) at runtime.
 - **Fallback logic** — if separation quality (SI-SNRi) is too low, the pipeline bypasses separation and feeds raw microphone channels directly to ASR.
 - **Hybrid speaker classification** — ECAPA-TDNN embeddings verify or override the rule-based energy heuristic; if ECAPA exceeds its latency budget, it falls back to rule-based.
 - **ECAPA device** — `ECAPAEmbedding` uses the **same resolved device as Whisper** (`_asr_device` in `InCarASRPipeline`), not `separation.device`, so both track GPU or CPU coherently.
 - **Per-file speaker count** — `InCarASRPipeline.process_file(..., n_speakers=...)` can override the default `n_speakers` for AISHELL-5 sessions with 2–4 reference speakers in the transcript.
 - **Dataset splits** — see `docs/dataset.md` §9: **dev, eval1, eval2** use materialized `wav/` + `text/`; **noise** is environmental-only and is **not** a WER split in `evaluate.py`.
+- **Hallucination prevention** — `WhisperASR` applies `no_speech_threshold`, `compression_ratio_threshold`, and delegates audio >30s to `ChunkedASR` to prevent repetition artifacts on long silences.
+- **Segment-level evaluation** — `evaluate.py --eval-mode segment` cuts sessions into per-utterance clips (from TextGrid) before feeding Whisper, producing accurate WER without hallucination bias.
+- **Ablation-ready CLI** — `evaluate.py --sep-method [auto|channel_select|ica|beamform|sepformer]` allows direct backend comparison without editing config files.
 
 ## Implementation order vs. diagrams
 
@@ -47,14 +51,16 @@ Mermaid *Diagram 1* draws parallel edges from `SEP` to `SPK` and `ASR` for data 
 | `src/pipeline/orchestrator.py` | `InCarASRPipeline` | End-to-end orchestration; lazy model loading; streaming/file-level API |
 | `src/pipeline/data_loader.py` | `AISHELL5Loader`, `Sample` | AISHELL-5 WAV + transcript loading and parsing |
 | `src/separation/separator.py` | `SpeechSeparator`, `ChunkedSeparator` | SepFormer / ConvTasNet inference; overlap-add chunked streaming |
-| `src/separation/cpu_separator.py` | `ChannelSelectSeparator`, `ICASeparator`, `get_separator()` | CPU-friendly separation; factory dispatch |
-| `src/asr/whisper_asr.py` | `WhisperASR`, `ChunkedASR` | HuggingFace Whisper pipeline; silence detection; chunked long-form ASR |
+| `src/separation/cpu_separator.py` | `ChannelSelectSeparator`, `ICASeparator`, `BeamformSeparator`, `get_separator()` | CPU-friendly separation; MVDR beamforming on 4-ch input; factory dispatch |
+| `src/asr/whisper_asr.py` | `WhisperASR`, `ChunkedASR` | HuggingFace Whisper pipeline; silence + hallucination detection; auto-chunks audio >30s |
 | `src/speaker/classifier.py` | `RuleBasedRoleClassifier`, `ECAPAEmbedding`, `SpeakerRoleClassifier` | Driver/Passenger role attribution via energy correlation and 192-dim embeddings |
 | `src/intent/engine.py` | `IntentEngine` | YAML-driven keyword matching → structured intent JSON (12 categories) |
 | `src/evaluation/metrics.py` | standalone functions | WER (CER), cpWER (Hungarian), Speaker Accuracy, SI-SNRi |
-| `configs/default.yaml` | — | Single config file: audio, separation, ASR, speaker, intent, evaluation, paths |
-| `evaluate.py` | `evaluate()` | Batch evaluation harness: baseline / pipeline / upper-bound modes |
-| `app.py` | Streamlit app | Real-time demo: upload WAV → display speaker transcripts + intents |
+| `configs/default.yaml` | — | Single config file: audio, separation, ASR (whisper-small, beam=2), speaker, intent, evaluation, paths |
+| `evaluate.py` | `evaluate()` | Batch evaluation harness: baseline / pipeline / upper-bound; `--sep-method` ablation; `--eval-mode session|segment` |
+| `scripts/error_analysis.py` | standalone script | Breakdown WER into substitution/insertion/deletion; detect hallucination via compression ratio |
+| `scripts/extract_demo_clips.py` | standalone script | Auto-select 30–60s demo clips with audible overlap from data/dev |
+| `app.py` | Streamlit app | Real-time demo + baseline vs. pipeline side-by-side comparison tab |
 
 ---
 
@@ -292,11 +298,13 @@ flowchart TD
 
     SEPFORMER["SepFormer<br/>(SpeechBrain GPU)<br/>High-quality neural separation"]
 
-    CPU_METHOD{{"cpu_fallback_method<br/>= 'channel_select' | 'ica'"}}
+    CPU_METHOD{{"cpu_fallback_method<br/>= 'channel_select' | 'ica' | 'beamform'"}}
 
     CHAN_SEL["ChannelSelectSeparator<br/>Zero-ML, instant<br/>Top-N energy channels"]
 
     ICA_SEP["ICASeparator<br/>FastICA (sklearn)<br/>Blind source separation"]
+
+    BEAM_SEP["BeamformSeparator<br/>MVDR Beamforming (CPU)<br/>4-channel spatial filtering"]
 
     ICA_AVAIL{{"sklearn available?"}}
 
@@ -310,6 +318,7 @@ flowchart TD
     GPU_AVAIL -->|"no"| CPU_METHOD
     CPU_METHOD -->|"channel_select"| CHAN_SEL
     CPU_METHOD -->|"ica"| ICA_AVAIL
+    CPU_METHOD -->|"beamform"| BEAM_SEP
     ICA_AVAIL -->|"yes"| ICA_SEP
     ICA_AVAIL -->|"no"| CHAN_FALLBACK
 ```

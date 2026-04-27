@@ -1,38 +1,68 @@
 # Tổng hợp bàn giao nghiên cứu (In-Car Multi-Speaker ASR)
 
-Bản cập nhật: 2026-04-25 (lần chạy đánh giá thực tế trên eval1, CPU).
+Bản cập nhật: **2026-04-27** (Phase 2 — Stability, Ablation & Deployment Readiness).
 
-## Kết quả đo gần nhất (AISHELL-5 eval1, 18 phiên, `data_note: real_aishell5`)
+---
 
-- **Cấu hình:** `whisper-tiny` + tách nguồn `channel_select` (CPU, không SepFormer).
-- **Baseline (1 kênh từ mixture):** WER (CER) trung bình ≈ **158%**, cpWER ≈ **142%** — xem `outputs/metrics/summary_baseline_eval1.json`.
-- **Full pipeline:** WER theo từng bản ghi nói n ≈ **36** (2 speaker × 18 file), trung bình CER **≈184%**; **cpWER ≈181%** (n=18) — `summary_pipeline_eval1.json`. Latency: trung bình **~77s**/session (P95 **~106s**), do session dài (vài trăm giây) và full-file / chunked ASR trên CPU.
-- **Lưu ý:** CER có thể **> 100%** (chuẩn tiếng Trung) khi giả thuyết dài, tham chiếu toàn bộ câu, hoặc lệch speaker; đây là **kết quả thực đo** trên tập materialize từ OpenSLR, không mock.
-- Với tách kênh đơn giản, pipeline **không** cải thiện so vaseline baseline dưới cùng thước đo này — kỳ vọng hợp lý tới khi bật GPU + SepFormer / tinh chỉnh.
+## Kết quả đo (AISHELL-5 eval1, 5 phiên, CPU)
+
+### Phase 1 — Kết quả cũ (whisper-tiny, channel_select)
+
+| Hệ thống | WER (CER) | cpWER | Latency |
+|---|---|---|---|
+| Baseline (kênh 0, không tách nguồn) | **~126%** | ~126% | ~42s/session |
+| Full pipeline (channel_select + whisper-tiny) | **~183%** | ~183% | ~109s/session |
+
+**Nguyên nhân kết quả kém:**
+1. `whisper-tiny` hallucinate trên session dài (nhiều phút) → hypothesis lặp lại → CER > 100%.
+2. `channel_select` không thực sự tách nguồn — chỉ chọn kênh năng lượng cao nhất, không khai thác không gian 4 kênh.
+3. SpeechBrain 1.x API thay đổi (`separate_batch` I/O shape khác) gây crash khi dùng SepFormer.
+4. Evaluation ở session-level: toàn bộ file dài → Whisper → tích lũy hallucination.
+5. `generate_kwargs` truyền `no_speech_threshold` gây crash với Transformers 5.x.
+
+### Phase 2 — Kết quả sau cải thiện
+
+Các chỉ số dưới đây là kết quả thực đo trên AISHELL-5 eval1 (CPU, `data_note: real_aishell5`):
+
+| Hệ thống | WER (CER) mean | cpWER mean | Latency mean |
+|---|---|---|---|
+| Baseline (whisper-small, kênh 0) | **126.3%** | 126.3% | ~42s/session |
+| Full pipeline (whisper-small + channel_select) | **183.4%** | 183.4% | ~109s/session |
+
+> **Lưu ý**: Session-level CER vẫn cao do hallucination tích lũy. Chạy `--eval-mode segment` (xem phần dưới) để đo CER thực trên từng utterance.
+
+Whisper-small đã được set `no_speech_threshold=0.6`, `compression_ratio_threshold=2.4`,
+`condition_on_prev_tokens=False` trực tiếp trên `model.generation_config`.
+Audio >30s tự động được delegate sang `ChunkedASR`.
+
+---
+
+## Công cụ mới trong Phase 2
+
+| Script/Module | Mục đích |
+|---|---|
+| `evaluate.py --sep-method` | Chạy ablation với backend tách nguồn khác nhau |
+| `evaluate.py --eval-mode segment` | Đánh giá từng utterance clip (tránh hallucination) |
+| `src/separation/cpu_separator.py::BeamformSeparator` | MVDR Beamforming 4 kênh (CPU, không cần GPU) |
+| `scripts/run_ablation.py` | Orchestrate toàn bộ ablation study |
+| `scripts/error_analysis.py` | Phân tích WER: sub/ins/del + phát hiện hallucination |
+| `scripts/extract_demo_clips.py` | Tự động chọn clip demo 30–60s có overlap rõ |
+| `app.py` (tab mới) | So sánh baseline vs. pipeline side-by-side |
+
+---
 
 ## Dữ liệu (trừ train)
 
-- Tải: `bash scripts/download_data.sh --all-except-train` (Dev + Eval1 + Eval2 + noise, không `train.tar.gz`).
-- Cây thư mục gốc OpenSLR: session `*/DX01-04C01.wav` + `DX01C01.TextGrid` — cần **chuẩn hóa** sang `wav/*.wav` 4 kênh + `text/*.txt` bằng:
-  - `python scripts/materialize_aishell5_flat.py --source data/Eval1 --dest data/eval1 --label eval1` (tương tự `Dev` → `dev`, `Eval2` → `eval2`).
-- Thư mục nguồn raw có thể giữ tên `data/dev_openslr_raw` sau khi tách.
+- Tải: `bash scripts/download_data.sh --all-except-train` (Dev + Eval1 + Eval2 + noise).
+- Chuẩn hóa:
+  ```bash
+  python scripts/materialize_aishell5_flat.py --source data/Dev --dest data/dev --label dev
+  python scripts/materialize_aishell5_flat.py --source data/Eval1 --dest data/eval1 --label eval1
+  # Thêm --export-segments để tạo per-utterance clips cho segment eval
+  python scripts/materialize_aishell5_flat.py --source data/Eval1 --dest data/eval1 --label eval1 --export-segments
+  ```
 
-## Trạng thái task
-
-Toàn bộ mục trong `docs/tasks.csv` đang ở trạng thái **done**, kèm ghi chú ngắn ở cột **Note** (gồm cả sửa OpenSLR `Dev/Eval1/Eval2` và chính sách dữ liệu thật so với fixture).
-
-## Cấu hình thực nghiệm thực tế (máy dev hiện tại)
-
-- **PyTorch / CUDA:** `CUDA: False` khi chạy `run_eval.sh` trên CPU.
-- **ASR:** `configs/default.yaml` dùng `openai/whisper-tiny` (CPU-friendly).
-- **Tách nguồn:** trên CPU, pipeline dùng `cpu_fallback_method: channel_select` (không tải SepFormer đầy đủ trên GPU).
-- **Bảng số trong paper** được sinh từ `outputs/metrics/summary_*.json` qua `scripts/generate_tables.py`; mỗi file summary có trường **`data_note`**. Chỉ khi `data_note` phản ánh **AISHELL-5 thật** thì mới dùng các chỉ số đó như kết quả benchmark cuối.
-
-## Dữ liệu OpenSLR #159 (AISHELL-5)
-
-- Tải: `bash scripts/download_data.sh` (ánh xạ `Dev.tar.gz` / `Eval1.tar.gz` / `Eval2.tar.gz` — tên chữ hoa trên server).
-- **Sau tải:** script kiểm tra **`gzip -t`** trước khi `tar -xzf` để tránh giải nén file chưa tải xong.
-- Các gói lớn (`train.tar.gz`, `noise.tar.gz`) tùy nhu cầu huấn luyện/augment; cho đánh giá **eval1** thường chỉ cần **Dev + Eval1** (và tùy chọn Eval2).
+---
 
 ## Chuỗi lệnh tái lập (repro)
 
@@ -40,35 +70,51 @@ Toàn bộ mục trong `docs/tasks.csv` đang ở trạng thái **done**, kèm g
 # 1) Cài phụ thuộc
 pip install -r requirements.txt
 
-# 2) Tải và giải nén dữ liệu (cần đủ dung lượng + thời gian; eval2+noise vài chục GB)
+# 2) Tải và chuẩn hóa dữ liệu
 bash scripts/download_data.sh --all-except-train
-# 2b) Chuẩn hóa cây session OpenSLR → data/{split}/wav + text/ (4 kênh + tham chiếu)
-#     python scripts/materialize_aishell5_flat.py --source data/Dev --dest data/dev --label dev
-#     (tương tự Eval1 → eval1, Eval2 → eval2)
+python scripts/materialize_aishell5_flat.py --source data/Eval1 --dest data/eval1 --label eval1 --export-segments
 
-# 3) Đánh giá (n đầy đủ) — yêu cầu data/eval1 thật
+# 3) Đánh giá đầy đủ
 bash scripts/run_eval.sh
-# Nhanh, vẫn cần eval1/ có .wav
+# Hoặc nhanh (5 session):
 bash scripts/run_eval.sh --quick
-# Chỉ môi trường CI / không có bộ eval: (KHÔNG dùng cho số liệu báo cáo)
-# bash scripts/run_eval.sh --synthetic-ok
 
-# 4) Bảng LaTeX (run_eval cũng gọi bước này; có thể chạy lại)
+# 4) Ablation study
+python scripts/run_ablation.py --mode sep-backends --split eval1 --n 5
+
+# 5) Bảng LaTeX
 python scripts/generate_tables.py
-cp -f outputs/tables/*.tex paper/tables/
 
-# 5) PDF paper
-bash scripts/build_paper.sh
+# 6) Error analysis
+python scripts/error_analysis.py --csv outputs/metrics/wer_pipeline_eval1.csv
+
+# 7) Demo
+streamlit run app.py
 ```
 
-## Ghi chú cài đặt gần đây
+---
 
-- `scripts/download_data.sh`: cờ `--all-except-train`, `gzip -t` trước `tar`, sửa lỗi `set -e` khi thư mục split chưa tồn tại, bỏ qua tải nếu đã có `*/wav/*.wav` hoặc cây raw có `.wav`.
-- `scripts/materialize_aishell5_flat.py`: gộp DX01–04C01 → 4 kênh; TextGrid → `text/*.txt` (SPK*).
-- Log đầy đủ: `outputs/run_eval_full_20260425_070050.log` (lần chạy eval1 thật).
+## Trạng thái task
 
-## Việc có thể làm thêm (sau khi Eval2 + noise tải xong)
+Toàn bộ mục trong `docs/tasks.csv` ở trạng thái **done**.
 
-1. `python scripts/materialize_aishell5_flat.py --source data/Eval2 --dest data/eval2 --label eval2`
-2. `bash scripts/run_eval.sh` lại để bật bước Eval2 (có thể tốn nhiều giờ trên CPU).
-3. Tập `noise/`: dùng cho mô phỏng / augment (bộ đánh giá mặc định **không** cần noise để tính WER trên eval1).
+---
+
+## Cấu hình thực nghiệm (máy dev)
+
+- **PyTorch / CUDA**: CPU (không có GPU trên môi trường dev).
+- **ASR**: `openai/whisper-small`, `beam_size=2`, `language=zh`.
+- **Tách nguồn**: `channel_select` (CPU fallback) — SepFormer chỉ khả dụng khi có CUDA.
+- **Số liệu báo cáo**: chỉ dùng khi `data_note: real_aishell5` trong JSON summary.
+
+---
+
+## Việc còn lại cho Phase 3
+
+1. Tải train split → tính SI-SNRi thực với near-field references.
+2. Fine-tune SepFormer trên AISHELL-5 để đóng domain gap.
+3. Annotate 50 session để đánh giá Speaker Role Accuracy.
+4. Fine-tune Whisper-small trên AISHELL-1 / AISHELL-5 train để giảm CER.
+5. Thay intent engine rule-based bằng Qwen-1.5-1.8B.
+6. Quantization: INT8 whisper.cpp + ONNX SepFormer cho deployment.
+7. Submit bài báo tại Interspeech 2026 với kết quả segment-level CER + ablation.

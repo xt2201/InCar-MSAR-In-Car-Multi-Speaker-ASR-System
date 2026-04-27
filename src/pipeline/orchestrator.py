@@ -140,7 +140,7 @@ class InCarASRPipeline:
 
     @property
     def _needs_mono(self) -> bool:
-        """SepFormer needs mono input; CPU separators need multichannel."""
+        """SepFormer needs mono input; CPU separators (channel_select/ica/beamform) need multichannel."""
         return getattr(self, "_sep_method", "sepformer") == "sepformer"
 
     @property
@@ -154,6 +154,13 @@ class InCarASRPipeline:
                 beam_size=asr_cfg.beam_size,
                 batch_size=asr_cfg.batch_size,
                 max_new_tokens=asr_cfg.max_new_tokens,
+                no_speech_threshold=float(getattr(asr_cfg, "no_speech_threshold", 0.6)),
+                compression_ratio_threshold=float(
+                    getattr(asr_cfg, "compression_ratio_threshold", 2.4)
+                ),
+                condition_on_prev_tokens=bool(
+                    getattr(asr_cfg, "condition_on_prev_tokens", False)
+                ),
             )
         return self._asr
 

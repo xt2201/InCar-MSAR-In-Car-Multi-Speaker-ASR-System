@@ -81,53 +81,88 @@ def generate_main_results_table(metrics_dir: Path, output_path: Path) -> None:
 
 
 def generate_ablation_table(metrics_dir: Path, ablation_dir: Path, output_path: Path) -> None:
-    """Generate ablation study table."""
+    """Generate ablation study table.
+
+    Prefers the structured sep_backends.csv from run_ablation.py --study sep-backends,
+    which contains all separation methods in one file.  Falls back to individual
+    no_separation.csv / wav2vec2_asr.csv for backward compatibility.
+    """
     rows = []
 
-    # Full pipeline (from metrics)
-    pipeline = load_summary(metrics_dir / "summary_pipeline_eval1.json")
-    rows.append({
-        "Configuration": "Full Pipeline (Separation + Whisper)",
-        "WER (\\%)": format_pct(pipeline.get("wer", {}).get("mean")),
-        "cpWER (\\%)": format_pct(pipeline.get("cpwer", {}).get("mean")),
-        "Latency (ms/file)": str(pipeline.get("latency", {}).get("mean_ms", "—")),
-        "Change": "—",
-    })
+    # --- Primary: separation backend ablation from run_ablation.py ---
+    sep_csv = ablation_dir / "sep_backends.csv"
+    if sep_csv.exists():
+        with open(sep_csv) as f:
+            sep_rows = list(csv.DictReader(f))
+        label_map = {
+            "baseline":       "Single-ch ASR (Baseline, no sep.)",
+            "channel_select": "ChannelSelect + Whisper-small (CPU)",
+            "beamform":       "MVDR Beamform + Whisper-small (CPU)",
+            "sepformer":      "SepFormer + Whisper-small (GPU)",
+            "upper_bound":    "Per-channel ASR (Upper-bound proxy)",
+        }
+        ref_cpwer: float | None = None
+        for r in sep_rows:
+            label = label_map.get(r.get("label", ""), r.get("label", "unknown"))
+            wer_v = _safe_float(r.get("wer_mean", ""))
+            cpwer_v = _safe_float(r.get("cpwer_mean", ""))
+            lat_v = r.get("latency_mean_ms", "—")
+            if r.get("label") == "sepformer":
+                ref_cpwer = cpwer_v
+            rows.append({
+                "System": label,
+                "WER (\\%)": format_pct(wer_v),
+                "cpWER (\\%)": format_pct(cpwer_v),
+                "Latency (ms)": str(round(float(lat_v), 0)) if lat_v and lat_v != "—" else "—",
+                "n": r.get("n_samples", "—"),
+            })
 
-    # No separation ablation
-    no_sep = ablation_dir / "no_separation.csv"
-    if no_sep.exists():
-        with open(no_sep) as f:
-            ablation_rows = list(csv.DictReader(f))
-        wers = [float(r["wer"]) for r in ablation_rows if r.get("wer") and r["wer"] != "nan"]
-        mean_wer = sum(wers) / len(wers) if wers else float("nan")
+    else:
+        # --- Fallback: individual files (legacy) ---
+        pipeline = load_summary(metrics_dir / "summary_pipeline_eval1.json")
         rows.append({
-            "Configuration": "w/o Separation (direct ASR on mix)",
-            "WER (\\%)": f"{mean_wer*100:.1f}" if mean_wer == mean_wer else "—",
-            "cpWER (\\%)": "—",
-            "Latency (ms/file)": "—",
-            "Change": "$\\uparrow$ WER (worse)",
+            "System": "Full Pipeline (SepFormer + Whisper)",
+            "WER (\\%)": format_pct(pipeline.get("wer", {}).get("mean")),
+            "cpWER (\\%)": format_pct(pipeline.get("cpwer", {}).get("mean")),
+            "Latency (ms)": str(pipeline.get("latency", {}).get("mean_ms", "—")),
+            "n": str(pipeline.get("n_samples", "—")),
         })
 
-    # Wav2Vec2 ablation
-    w2v_csv = ablation_dir / "wav2vec2_asr.csv"
-    if w2v_csv.exists():
-        with open(w2v_csv) as f:
-            w2v_rows = list(csv.DictReader(f))
-        cpwers = [float(r["cpwer"]) for r in w2v_rows if r.get("cpwer") and r["cpwer"] != "nan"]
-        mean_cpwer = sum(cpwers) / len(cpwers) if cpwers else float("nan")
-        rows.append({
-            "Configuration": "Whisper → Wav2Vec2-XLSR (Chinese)",
-            "WER (\\%)": "—",
-            "cpWER (\\%)": f"{mean_cpwer*100:.1f}" if mean_cpwer == mean_cpwer else "—",
-            "Latency (ms/file)": "—",
-            "Change": "See discussion",
-        })
+        no_sep = ablation_dir / "no_separation.csv"
+        if no_sep.exists():
+            with open(no_sep) as f:
+                ab_rows = list(csv.DictReader(f))
+            wers = [float(r["wer"]) for r in ab_rows if r.get("wer") and r["wer"] != "nan"]
+            mean_wer = sum(wers) / len(wers) if wers else float("nan")
+            rows.append({
+                "System": "w/o Separation (direct ASR on mix)",
+                "WER (\\%)": f"{mean_wer*100:.1f}" if mean_wer == mean_wer else "—",
+                "cpWER (\\%)": "—",
+                "Latency (ms)": "—",
+                "n": str(len(ab_rows)),
+            })
+
+        w2v_csv = ablation_dir / "wav2vec2_asr.csv"
+        if w2v_csv.exists():
+            with open(w2v_csv) as f:
+                w2v_rows = list(csv.DictReader(f))
+            cpwers = [float(r["cpwer"]) for r in w2v_rows if r.get("cpwer") and r["cpwer"] != "nan"]
+            mean_cpwer = sum(cpwers) / len(cpwers) if cpwers else float("nan")
+            rows.append({
+                "System": "Whisper → Wav2Vec2-XLSR (Chinese)",
+                "WER (\\%)": "—",
+                "cpWER (\\%)": f"{mean_cpwer*100:.1f}" if mean_cpwer == mean_cpwer else "—",
+                "Latency (ms)": "—",
+                "n": str(len(w2v_rows)),
+            })
 
     tex = _make_latex_table(
         rows,
-        caption="Ablation Study on AISHELL-5 Eval1. Each row removes or replaces one component. "
-                "Full pipeline is the reference (first row).",
+        caption=(
+            "Ablation Study on AISHELL-5 Eval1. "
+            "WER and cpWER are lower-is-better (Character Error Rate). "
+            "Latency is mean total ms per session."
+        ),
         label="tab:ablation",
     )
 
@@ -135,6 +170,15 @@ def generate_ablation_table(metrics_dir: Path, ablation_dir: Path, output_path: 
     with open(output_path, "w") as f:
         f.write(tex)
     print(f"Saved: {output_path}")
+
+
+def _safe_float(v: str) -> float | None:
+    """Convert string to float; return None on failure."""
+    try:
+        f = float(v)
+        return f if f == f else None  # NaN check
+    except (ValueError, TypeError):
+        return None
 
 
 def _make_latex_table(rows: list[dict], caption: str, label: str) -> str:

@@ -8,6 +8,11 @@ import torch
 import numpy as np
 from loguru import logger
 
+# Maximum audio duration (seconds) to send in one transcribe() call.
+# Long audio causes Whisper hallucination loops (repetitive characters).
+# Audio longer than this is chunked via ChunkedASR.transcribe_long() instead.
+_MAX_SINGLE_PASS_SEC = 30.0
+
 
 class WhisperASR:
     """OpenAI Whisper ASR wrapper for Mandarin Chinese.
@@ -24,6 +29,15 @@ class WhisperASR:
         Beam search width. Smaller = faster, slightly lower quality.
     batch_size : int
         Inference batch size.
+    no_speech_threshold : float
+        Whisper probability threshold below which a chunk is considered
+        non-speech and returned as empty.  Higher = more aggressive filtering.
+    compression_ratio_threshold : float
+        If the zlib compression ratio of the hypothesis exceeds this value
+        the output is likely a hallucination loop; return empty instead.
+    condition_on_prev_tokens : bool
+        If False (default), each chunk is decoded independently, preventing
+        the model from perpetuating a hallucination across chunks.
     """
 
     def __init__(
@@ -34,6 +48,9 @@ class WhisperASR:
         beam_size: int = 2,
         batch_size: int = 1,
         max_new_tokens: int = 448,
+        no_speech_threshold: float = 0.6,
+        compression_ratio_threshold: float = 2.4,
+        condition_on_prev_tokens: bool = False,
     ) -> None:
         self.model_id = model_id
         self.language = language
@@ -44,6 +61,9 @@ class WhisperASR:
         self.beam_size = beam_size
         self.batch_size = batch_size
         self.max_new_tokens = max_new_tokens
+        self.no_speech_threshold = no_speech_threshold
+        self.compression_ratio_threshold = compression_ratio_threshold
+        self.condition_on_prev_tokens = condition_on_prev_tokens
         self._pipeline = None
         self._model = None
         self._processor = None
@@ -70,11 +90,22 @@ class WhisperASR:
         )
         self._model.to(self.device)
 
-        # Transformers ≥5.0 warns when both max_new_tokens and max_length are set.
-        # Clear max_length from generation config so max_new_tokens in generate_kwargs
-        # is the sole token-limit control (no conflict warning).
+        # Transformers ≥5.0: bake hallucination-prevention params into the model's
+        # generation_config so they take effect at model.generate() time.
+        # These Whisper-specific params (no_speech_threshold, compression_ratio_threshold)
+        # are consumed inside WhisperForConditionalGeneration.generate(); they are NOT
+        # valid pipeline generate_kwargs — passing them there causes a "logprobs" crash
+        # in transformers ≥5.x.  Setting via generation_config is the correct approach.
         if hasattr(self._model, "generation_config") and self._model.generation_config is not None:
-            self._model.generation_config.max_length = None
+            gc = self._model.generation_config
+            gc.max_length = None  # avoid conflict with max_new_tokens
+            if hasattr(gc, "no_speech_threshold"):
+                gc.no_speech_threshold = self.no_speech_threshold
+            if hasattr(gc, "compression_ratio_threshold"):
+                gc.compression_ratio_threshold = self.compression_ratio_threshold
+            # condition_on_prev_tokens: set False to decode each chunk independently
+            if hasattr(gc, "condition_on_prev_tokens"):
+                gc.condition_on_prev_tokens = self.condition_on_prev_tokens
 
         self._processor = AutoProcessor.from_pretrained(self.model_id)
 
@@ -94,6 +125,19 @@ class WhisperASR:
         )
         logger.info("Whisper loaded successfully.")
 
+    @staticmethod
+    def _compression_ratio(text: str) -> float:
+        """Estimate zlib compression ratio as a hallucination proxy.
+
+        A high ratio (many repetitive characters) indicates hallucination.
+        """
+        import zlib
+        if not text:
+            return 0.0
+        encoded = text.encode("utf-8")
+        compressed = zlib.compress(encoded)
+        return len(encoded) / max(len(compressed), 1)
+
     def transcribe(
         self,
         audio: torch.Tensor | np.ndarray,
@@ -101,6 +145,9 @@ class WhisperASR:
         return_timestamps: bool = False,
     ) -> dict:
         """Transcribe audio to text.
+
+        For audio longer than 30 s, the method automatically delegates to
+        ChunkedASR to avoid Whisper hallucination on long inputs.
 
         Parameters
         ----------
@@ -117,6 +164,7 @@ class WhisperASR:
             "text" : str – transcribed text
             "language" : str
             "inference_time_ms" : float
+            "is_silent" : bool
             "chunks" : list (only if return_timestamps=True)
         """
         self._load_model()
@@ -141,9 +189,29 @@ class WhisperASR:
                 "is_silent": True,
             }
 
+        # Auto-chunk long audio: sending >30 s in one call causes Whisper to
+        # hallucinate repetitive characters that inflate WER to >100%.
+        duration_sec = len(audio_np) / sample_rate
+        if duration_sec > _MAX_SINGLE_PASS_SEC:
+            logger.debug(
+                f"Audio {duration_sec:.1f}s > {_MAX_SINGLE_PASS_SEC}s — "
+                "delegating to ChunkedASR to prevent hallucination."
+            )
+            chunked = ChunkedASR(self, chunk_sec=_MAX_SINGLE_PASS_SEC, sample_rate=sample_rate)
+            long_result = chunked.transcribe_long(audio_np, sample_rate)
+            return {
+                "text": long_result["text"],
+                "language": self.language,
+                "inference_time_ms": long_result["total_inference_ms"],
+                "is_silent": not bool(long_result["text"]),
+            }
+
         t0 = time.perf_counter()
 
-        # language/task are set at pipeline creation; only per-call controls here
+        # language/task are set at pipeline creation.
+        # no_speech_threshold / compression_ratio_threshold are baked into
+        # generation_config at model-load time (_load_model); do NOT pass them
+        # as generate_kwargs — that causes a crash in transformers ≥5.x.
         generate_kwargs = {
             "num_beams": self.beam_size,
             "max_new_tokens": min(self.max_new_tokens, 224),
@@ -158,12 +226,22 @@ class WhisperASR:
         )
 
         inference_ms = (time.perf_counter() - t0) * 1000
+        text = result["text"].strip()
+
+        # Secondary hallucination guard: compression ratio check.
+        # Repetition loops compress extremely well; discard such output.
+        if text and self._compression_ratio(text) > self.compression_ratio_threshold:
+            logger.warning(
+                f"High compression ratio ({self._compression_ratio(text):.2f}) — "
+                "likely hallucination, discarding output."
+            )
+            text = ""
 
         output = {
-            "text": result["text"].strip(),
+            "text": text,
             "language": self.language,
             "inference_time_ms": inference_ms,
-            "is_silent": False,
+            "is_silent": not bool(text),
         }
 
         if return_timestamps and "chunks" in result:

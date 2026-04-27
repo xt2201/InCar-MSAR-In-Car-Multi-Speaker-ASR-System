@@ -71,7 +71,7 @@ SKIP_EVAL2=false
 # ------------------------------------------------------------------
 if $RUN_EVAL1; then
   echo ""
-  echo "--- [1/5] Baseline (single-channel) — eval1 ---"
+  echo "--- [1/6] Baseline (single-channel) — eval1 ---"
   python evaluate.py --split eval1 --mode baseline --n "$N" --config configs/default.yaml
   echo "[INFO] Baseline done."
 fi
@@ -81,7 +81,7 @@ fi
 # ------------------------------------------------------------------
 if $RUN_EVAL1; then
   echo ""
-  echo "--- [2/5] Full Pipeline — eval1 ---"
+  echo "--- [2/6] Full Pipeline — eval1 ---"
   python evaluate.py --split eval1 --mode pipeline --n "$N" --config configs/default.yaml
   echo "[INFO] Pipeline eval1 done."
 fi
@@ -92,10 +92,10 @@ fi
 if $RUN_EVAL2; then
   if $SKIP_EVAL2; then
     echo ""
-    echo "--- [3/5] eval2 — skipped (data not found) ---"
+    echo "--- [3/6] eval2 — skipped (data not found) ---"
   else
     echo ""
-    echo "--- [3/5] Full Pipeline — eval2 ---"
+    echo "--- [3/6] Full Pipeline — eval2 ---"
     python evaluate.py --split eval2 --mode pipeline --n "$N" --config configs/default.yaml
     echo "[INFO] Pipeline eval2 done."
   fi
@@ -105,7 +105,7 @@ fi
 # 4. Tests
 # ------------------------------------------------------------------
 echo ""
-echo "--- [4/5] Unit + Integration Tests ---"
+echo "--- [4/6] Unit + Integration Tests ---"
 # Use || true so a test failure does not abort the script before table generation.
 # Test results are still visible; non-zero exit is re-reported at the end.
 python -m pytest tests/ -q --tb=short; PYTEST_EXIT=$?
@@ -115,10 +115,20 @@ fi
 echo "[INFO] Tests done."
 
 # ------------------------------------------------------------------
-# 5. Tables & Paper
+# 5. Error Analysis
 # ------------------------------------------------------------------
 echo ""
-echo "--- [5/5] Generate LaTeX Tables ---"
+echo "--- [5/6] Error Analysis ---"
+python scripts/error_analysis.py --all-csvs outputs/metrics/ \
+    --output outputs/metrics/error_analysis_all.json 2>/dev/null || \
+    echo "[WARN] Error analysis failed (continuing)"
+echo "[INFO] Error analysis done."
+
+# ------------------------------------------------------------------
+# 6. Tables & Paper
+# ------------------------------------------------------------------
+echo ""
+echo "--- [6/6] Generate LaTeX Tables ---"
 python scripts/generate_tables.py
 cp -f outputs/tables/*.tex paper/tables/ 2>/dev/null || true
 echo "[INFO] Tables generated."
@@ -128,5 +138,6 @@ echo "============================================"
 echo "Evaluation complete!"
 echo "  Metrics:  outputs/metrics/"
 echo "  Tables:   outputs/tables/  &  paper/tables/"
+echo "  Errors:   outputs/metrics/error_analysis_all.json"
 echo "============================================"
 echo "$(date): run_eval.sh completed" >> outputs/repro_check.txt

@@ -1,24 +1,24 @@
 {
   "wer": {
-    "mean": 1.0,
-    "median": 1.0,
-    "std": 0.0,
-    "min": 1.0,
-    "max": 1.0,
+    "mean": 2.193750068454052,
+    "median": 1.9816185525393446,
+    "std": 1.0652568812262286,
+    "min": 1.036607687614399,
+    "max": 4.968229954614221,
     "n": 10
   },
   "cpwer": {
-    "mean": 1.0,
-    "median": 1.0,
-    "std": 0.0,
-    "min": 1.0,
-    "max": 1.0,
+    "mean": 2.193750068454052,
+    "median": 1.940298613189181,
+    "std": 0.4949547451867862,
+    "min": 1.633376135947631,
+    "max": 3.00241882111431,
     "n": 5
   },
   "latency": {
-    "mean_ms": 238.7,
-    "p95_ms": 240.1,
-    "median_ms": 238.9,
+    "mean_ms": 126475.3,
+    "p95_ms": 160442.8,
+    "median_ms": 127442.5,
     "n": 5,
     "n_for_latency_stats": 4,
     "dropped_warmup": 1
@@ -26,5 +26,5 @@
   "mode": "pipeline",
   "split": "eval2",
   "n_samples": 5,
-  "data_note": "synthetic_sine_mixture"
+  "data_note": "real_aishell5"
 }

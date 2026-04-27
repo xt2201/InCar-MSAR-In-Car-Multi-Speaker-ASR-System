@@ -1,26 +1,32 @@
 {
   "wer": {
-    "mean": 1.0,
-    "median": 1.0,
-    "std": 0.0,
-    "min": 1.0,
-    "max": 1.0,
-    "n": 10
+    "mean": 0.8054554424289478,
+    "median": 0.8054554424289478,
+    "std": 0.00020990671466214472,
+    "min": 0.8052455357142857,
+    "max": 0.80566534914361,
+    "n": 2
   },
   "cpwer": {
-    "mean": 1.0,
-    "median": 1.0,
-    "std": 0.0,
-    "min": 1.0,
-    "max": 1.0,
-    "n": 10
+    "mean": 0.8054554424289478,
+    "median": 0.8054554424289478,
+    "std": 0.00020990671466214472,
+    "min": 0.8052455357142857,
+    "max": 0.80566534914361,
+    "n": 2
   },
   "latency": {
-    "mean_ms": 821.2,
-    "p95_ms": 7218.9,
-    "n": 10
+    "mean_ms": 21318.3,
+    "p95_ms": 21318.3,
+    "median_ms": 21318.3,
+    "n": 2,
+    "n_for_latency_stats": 1,
+    "dropped_warmup": 1
   },
   "mode": "baseline",
   "split": "dev",
-  "n_samples": 10
+  "sep_method": "auto",
+  "eval_mode": "session",
+  "n_samples": 2,
+  "data_note": "real_aishell5"
 }

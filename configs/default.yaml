@@ -35,15 +35,20 @@ separation:
 # ASR (Automatic Speech Recognition)
 # -----------------------------------------------------------
 asr:
-  # CPU-friendly default. For GPU, use "openai/whisper-small" or larger.
-  model: "openai/whisper-tiny"
+  # whisper-small (244M params): significantly better CER on noisy Mandarin vs tiny (39M).
+  # Falls back to CPU automatically if no GPU. Use "openai/whisper-tiny" for fastest CPU mode.
+  model: "openai/whisper-small"
   language: "zh"              # Mandarin Chinese
   task: "transcribe"
   device: "auto"              # "auto" = cuda if available, else cpu
-  beam_size: 1                # 1 = greedy (fastest). Use 2-4 with GPU for better WER.
+  beam_size: 2                # 2 = fast beam search. Use 4 for best quality evaluation.
   batch_size: 1
-  max_new_tokens: 224         # Max output tokens (224 = whisper-tiny limit)
+  max_new_tokens: 224         # Max output tokens per 30-s chunk
   return_timestamps: false    # Disable for speed in demo mode
+  # Hallucination prevention (long audio / noisy in-car signals)
+  no_speech_threshold: 0.6          # Suppress non-speech chunks (Whisper no_speech_prob)
+  compression_ratio_threshold: 2.4  # Discard outputs with repetition loops
+  condition_on_prev_tokens: false   # Independent decoding per chunk (no cross-chunk hallucination)
 
 # -----------------------------------------------------------
 # Speaker Role Classification
