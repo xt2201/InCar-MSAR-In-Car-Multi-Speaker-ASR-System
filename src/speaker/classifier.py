@@ -155,10 +155,12 @@ class ECAPAEmbedding:
         from speechbrain.pretrained import EncoderClassifier
 
         logger.info(f"Loading ECAPA-TDNN from {self.model_hub}...")
+        # SpeechBrain ≥1.0 requires "cuda:N" format, not plain "cuda"
+        sb_device = "cuda:0" if self.device == "cuda" else self.device
         self._model = EncoderClassifier.from_hparams(
             source=self.model_hub,
             savedir=f".cache/speechbrain/ecapa",
-            run_opts={"device": self.device},
+            run_opts={"device": sb_device},
         )
         logger.info("ECAPA-TDNN loaded successfully.")
 

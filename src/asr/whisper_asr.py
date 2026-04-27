@@ -70,8 +70,17 @@ class WhisperASR:
         )
         self._model.to(self.device)
 
+        # Transformers ≥5.0 warns when both max_new_tokens and max_length are set.
+        # Clear max_length from generation config so max_new_tokens in generate_kwargs
+        # is the sole token-limit control (no conflict warning).
+        if hasattr(self._model, "generation_config") and self._model.generation_config is not None:
+            self._model.generation_config.max_length = None
+
         self._processor = AutoProcessor.from_pretrained(self.model_id)
 
+        # Transformers ≥5.0: pass language/task at pipeline creation to avoid
+        # SuppressTokensLogitsProcessor duplicate warning when language is also in
+        # per-call generate_kwargs. The pipeline bakes these into the generation config.
         self._pipeline = pipeline(
             "automatic-speech-recognition",
             model=self._model,
@@ -81,6 +90,7 @@ class WhisperASR:
             batch_size=self.batch_size,
             torch_dtype=dtype,
             device=self.device,
+            generate_kwargs={"language": self.language, "task": "transcribe"},
         )
         logger.info("Whisper loaded successfully.")
 
@@ -133,11 +143,9 @@ class WhisperASR:
 
         t0 = time.perf_counter()
 
+        # language/task are set at pipeline creation; only per-call controls here
         generate_kwargs = {
-            "language": self.language,
-            "task": "transcribe",
             "num_beams": self.beam_size,
-            # max_new_tokens passed via generate_kwargs (transformers ≥4.49)
             "max_new_tokens": min(self.max_new_tokens, 224),
         }
 

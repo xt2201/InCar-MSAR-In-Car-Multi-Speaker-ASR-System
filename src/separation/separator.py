@@ -62,10 +62,12 @@ class SpeechSeparator:
         if backend == "speechbrain":
             from speechbrain.pretrained import SepformerSeparation
             logger.info(f"Loading SepFormer from {self.model_hub}...")
+            # SpeechBrain ≥1.0 requires "cuda:N" format, not plain "cuda"
+            sb_device = "cuda:0" if self.device == "cuda" else self.device
             self._model = SepformerSeparation.from_hparams(
                 source=self.model_hub,
                 savedir=f".cache/speechbrain/{self.model_name}",
-                run_opts={"device": self.device},
+                run_opts={"device": sb_device},
             )
             logger.info("SepFormer loaded successfully.")
 
@@ -116,9 +118,9 @@ class SpeechSeparator:
         with torch.no_grad():
             backend = self.SUPPORTED_MODELS.get(self.model_name, "speechbrain")
             if backend == "speechbrain":
-                # SpeechBrain SepFormer expects [T] input
-                sources = self._model.separate_batch(mixture.squeeze(0).to(self.device))
-                # Output shape: [1, T, N] -> [N, T]
+                # SpeechBrain ≥1.0 separate_batch expects [B, T]; returns [B, T, N]
+                sources = self._model.separate_batch(mixture.to(self.device))
+                # Output shape: [B, T, N] → [N, T]  (B=1 for single-file inference)
                 sources = sources.squeeze(0).permute(1, 0)
             elif backend == "asteroid":
                 # Asteroid expects [B, T] input
