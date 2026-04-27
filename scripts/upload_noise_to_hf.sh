@@ -3,6 +3,14 @@
 # Upload local data/noise/ to HuggingFace dataset xt2201/InCar-MSAR
 # (path_in_repo: noise/). Large (~10-20 GB) - can take a long time.
 #
+# Uses HfApi.upload_large_folder (not upload_folder): multiple commits, local
+# cache under data/.cache/huggingface/, resumable after interrupt — avoids
+# single huge commits that often stall mid-upload on slow or flaky links.
+#
+# Optional env:
+#   HF_UPLOAD_WORKERS       parallel workers (default: 2; lower if unstable)
+#   HF_UPLOAD_REPORT_EVERY  status print interval in seconds (default: 30)
+#
 # Prereq: .env with HF_TOKEN; run after: bash scripts/download_data.sh --noise
 # Usage: bash scripts/upload_noise_to_hf.sh
 # ============================================================
@@ -72,7 +80,7 @@ ensure_huggingface_hub() {
     log_info "Creating ${PROJECT_ROOT}/.venv..."
     python3 -m venv "${PROJECT_ROOT}/.venv"
   fi
-  "${PROJECT_ROOT}/.venv/bin/pip" install -q "pip>=24" "huggingface-hub>=0.20.0"
+  "${PROJECT_ROOT}/.venv/bin/pip" install -q "pip>=24" "huggingface-hub>=0.25.0"
   PYTHON="${vpy}"
   if ! "${PYTHON}" -c "import huggingface_hub" 2>/dev/null; then
     log_error "Could not import huggingface_hub after .venv install. Run: ${PROJECT_ROOT}/.venv/bin/pip install huggingface-hub"
@@ -82,22 +90,43 @@ ensure_huggingface_hub() {
 ensure_huggingface_hub
 export HF_TOKEN
 export NOISE_DIR
+export PROJECT_ROOT
 "${PYTHON}" - <<'PY'
-import os, time
+import os
+import time
+from pathlib import Path
+
 from huggingface_hub import HfApi
 
+repo_id = "xt2201/InCar-MSAR"
+data_root = Path(os.environ["PROJECT_ROOT"]) / "data"
+noise_dir = Path(os.environ["NOISE_DIR"]).resolve()
+if not data_root.is_dir():
+    raise SystemExit(f"Missing data root: {data_root}")
+# upload_large_folder has no path_in_repo; paths in repo = relative to data_root
+# → files under data/noise/... become noise/... on the Hub (matches snapshot_download).
+if not str(noise_dir).startswith(str(data_root.resolve())):
+    raise SystemExit(f"noise dir must live under {data_root}, got {noise_dir}")
+
 api = HfApi(token=os.environ["HF_TOKEN"])
+if not hasattr(api, "upload_large_folder"):
+    raise SystemExit("huggingface_hub too old: pip install 'huggingface-hub>=0.25' in this environment.")
+
+workers = int(os.environ.get("HF_UPLOAD_WORKERS", "2"))
+report_every = int(os.environ.get("HF_UPLOAD_REPORT_EVERY", "30"))
+
 t0 = time.time()
-url = api.upload_folder(
-    folder_path=os.environ["NOISE_DIR"],
-    path_in_repo="noise",
-    repo_id="xt2201/InCar-MSAR",
+api.upload_large_folder(
+    repo_id=repo_id,
+    folder_path=str(data_root),
     repo_type="dataset",
-    commit_message="Add environmental noise split (no transcripts)",
-    token=os.environ["HF_TOKEN"],
+    allow_patterns=["noise/**"],
     ignore_patterns=[".*", "**/.DS_Store"],
+    num_workers=workers,
+    print_report=True,
+    print_report_every=max(5, report_every),
 )
-print(f"Done in {time.time() - t0:.0f}s: {url}")
+print(f"Done in {time.time() - t0:.0f}s — see https://huggingface.co/datasets/{repo_id} (tree: noise/)")
 PY
 
 log_info "Complete. Others can run: bash scripts/download_data.sh --noise --hf-only"
