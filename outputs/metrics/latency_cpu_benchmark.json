@@ -1,0 +1,12 @@
+{
+  "n_samples": 19,
+  "device": "cpu",
+  "model": "whisper-tiny",
+  "separation": "ChannelSelect",
+  "sep_mean_ms": 0.4,
+  "sep_p95_ms": 0.7,
+  "asr_mean_ms": 291.1,
+  "asr_p95_ms": 1718.6,
+  "total_mean_ms": 291.5,
+  "total_p95_ms": 1719.1
+}

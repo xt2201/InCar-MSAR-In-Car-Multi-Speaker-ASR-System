@@ -1,0 +1,64 @@
+% ============================================================
+% Section 2: Related Work
+% ============================================================
+
+\section{Related Work}
+\label{sec:related}
+
+\subsection{Speech Separation}
+
+Neural speech separation has advanced considerably since the introduction
+of time-domain models. Conv-TasNet~\cite{luo2019conv} demonstrated that
+depthwise separable convolutions with a learned encoder-decoder could
+outperform spectrogram-domain methods in Signal-to-Noise Ratio (SNR).
+SepFormer~\cite{subakan2021attention} subsequently replaced the convolutional
+stack with a hierarchical Transformer, achieving state-of-the-art
+Scale-Invariant SNR Improvement (SI-SNRi) on WSJ0-2Mix and WHAM!~\cite{wichern2019wham}.
+Multi-channel extensions such as FaSNet~\cite{luo2020end} and
+SpatialNet~\cite{wang2023tf} incorporate inter-microphone time differences
+to improve separation in reverberant environments—directly applicable to
+the four-microphone automotive setup in AISHELL-5.
+
+\subsection{Multi-Speaker ASR}
+
+The Joint CTC/Attention encoder-decoder framework~\cite{watanabe2017hybrid}
+pioneered multi-speaker ASR by estimating speaker-attributed transcripts
+within a single forward pass. Serialized Output Training (SOT)~\cite{kanda2020serialized}
+extended this to handle a variable number of speakers without permutation
+ambiguity. More recently, neural diarization approaches such as
+EEND~\cite{fujita2019end} and its variants separate the diarization and
+recognition tasks via a two-stage pipeline. Whisper~\cite{radford2023robust},
+trained on 680k hours of weakly supervised data, achieves near-human WER
+on clean speech in 99 languages, making it a natural choice as the ASR
+backbone when labeled in-domain data is unavailable.
+
+\subsection{Speaker Diarization and Role Classification}
+
+Speaker diarization assigns a speaker identity to each time segment.
+X-vectors~\cite{snyder2018x} and their successor ECAPA-TDNN~\cite{desplanques2020ecapa}
+produce compact embeddings that enable clustering-based diarization.
+In automotive contexts, role classification (driver vs.\ passenger) carries
+additional value for command prioritization: driver commands typically take
+precedence over passenger requests. Prior work in automotive ASR has largely
+ignored this distinction, treating all occupants equivalently.
+
+\subsection{In-Car Voice Assistants}
+
+Industrial deployments of in-car voice assistants (e.g., Mercedes-Benz
+MBUX, BMW Intelligent Personal Assistant) demonstrate commercial interest but
+are proprietary and evaluated on internal benchmarks. Academic datasets for
+automotive ASR include CHiME-6~\cite{watanabe2020chime6} (dinner party
+scenario, four microphones), which shares methodological similarities with
+AISHELL-5 but covers a distinct domain. AISHELL-5~\cite{aishell5_2025} is,
+to our knowledge, the \emph{first public corpus} specifically designed for
+multi-speaker Mandarin ASR in a real vehicle cabin, making it the natural
+benchmark for the task we study.
+
+\subsection{Gap Addressed by This Work}
+
+Despite progress in separation and multi-speaker ASR individually,
+no prior work has presented a \emph{complete, open-source, benchmarked} system
+covering the full chain from raw multi-channel in-car audio to speaker-labeled
+intent. Our work closes this gap by coupling pre-trained separation
+(SepFormer), pre-trained ASR (Whisper), rule-based role classification, and an
+intent engine into a reproducible pipeline evaluated on AISHELL-5.

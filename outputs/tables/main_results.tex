@@ -1,0 +1,14 @@
+\begin{table}[h]
+\centering
+\caption{Main Results on AISHELL-5 Eval1. WER and cpWER are lower-is-better. Near-field upper-bound is unavailable in dev/eval splits.}
+\label{tab:main_results}
+\begin{tabular}{lccccc}
+\toprule
+\textbf{System} & \textbf{WER (\%)} & \textbf{cpWER (\%)} & \textbf{Spk. Acc. (\%)} & \textbf{Latency (ms/file)} & \textbf{Note} \\
+\midrule
+Single-channel ASR (Baseline) & 158.2 & 141.6 & — & 38472.7 & Channel 0, no separation \\
+Multi-channel + Separation + Whisper (Ours) & 184.1 & 180.7 & — & 76672.7 & Full pipeline \\
+Per-channel ASR (Upper-bound proxy) & \textit{N/A} & \textit{N/A} & \textit{N/A} & — & Each channel → ASR independently \\
+\bottomrule
+\end{tabular}
+\end{table}

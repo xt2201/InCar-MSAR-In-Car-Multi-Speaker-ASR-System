@@ -1,0 +1,141 @@
+# ============================================================
+# Intent Engine - Keyword Mapping Configuration
+# Language: Mandarin Chinese (Simplified)
+# ============================================================
+# Format: intent_category -> list of trigger keywords/patterns
+
+intents:
+
+  climate_increase:
+    keywords:
+      - "增加温度"
+      - "调高温度"
+      - "温度高一点"
+      - "暖一点"
+      - "热一点"
+      - "开暖气"
+      - "加热"
+    action: "increase"
+    entity: "temperature"
+
+  climate_decrease:
+    keywords:
+      - "降低温度"
+      - "调低温度"
+      - "温度低一点"
+      - "凉一点"
+      - "冷一点"
+      - "开空调"
+      - "降温"
+    action: "decrease"
+    entity: "temperature"
+    value_pattern: "(\\d+)度"  # Extract numeric value
+
+  media_play:
+    keywords:
+      - "播放音乐"
+      - "放音乐"
+      - "开音乐"
+      - "播放"
+      - "放歌"
+      - "开歌"
+      - "放摇滚"
+      - "放爵士"
+      - "放流行"
+      - "放古典"
+      - "放民谣"
+    action: "play"
+    entity: "media"
+    genre_keywords:
+      jazz: ["爵士", "爵士乐"]
+      rock: ["摇滚", "摇滚乐"]
+      pop: ["流行", "流行乐"]
+      classical: ["古典", "古典乐"]
+      folk: ["民谣"]
+
+  media_pause:
+    keywords:
+      - "暂停"
+      - "停止音乐"
+      - "关音乐"
+      - "关掉音乐"
+      - "停播"
+    action: "pause"
+    entity: "media"
+
+  media_volume_up:
+    keywords:
+      - "调大音量"
+      - "声音大一点"
+      - "音量大"
+      - "加大音量"
+      - "大声点"
+    action: "vol_up"
+    entity: "volume"
+
+  media_volume_down:
+    keywords:
+      - "调小音量"
+      - "声音小一点"
+      - "音量小"
+      - "减小音量"
+      - "小声点"
+    action: "vol_down"
+    entity: "volume"
+
+  navigation_go:
+    keywords:
+      - "导航去"
+      - "带我去"
+      - "去公司"
+      - "去家"
+      - "回家"
+      - "开始导航"
+      - "导航到"
+    action: "start"
+    entity: "navigation"
+    dest_keywords:
+      home: ["家", "回家"]
+      work: ["公司", "办公室", "单位"]
+
+  navigation_cancel:
+    keywords:
+      - "取消导航"
+      - "关闭导航"
+      - "停止导航"
+      - "不用导航了"
+    action: "cancel"
+    entity: "navigation"
+
+  window_open:
+    keywords:
+      - "打开车窗"
+      - "开窗"
+      - "开车窗"
+      - "窗户开一下"
+    action: "open"
+    entity: "window"
+
+  window_close:
+    keywords:
+      - "关窗"
+      - "关车窗"
+      - "关上窗户"
+      - "窗户关上"
+    action: "close"
+    entity: "window"
+
+  phone_call:
+    keywords:
+      - "打电话"
+      - "给.+打电话"
+      - "呼叫"
+      - "联系"
+    action: "call"
+    entity: "phone"
+    contact_pattern: "给(.+?)打电话|呼叫(.+)"
+
+  unknown:
+    keywords: []
+    action: "unknown"
+    entity: null

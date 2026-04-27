@@ -1,0 +1,53 @@
+% ============================================================
+% Section 1: Introduction & Motivation
+% ============================================================
+
+\section{Introduction}
+\label{sec:intro}
+
+Voice interfaces in automotive environments have become increasingly prevalent,
+with modern vehicles integrating speech-controlled infotainment systems,
+navigation aids, and climate controls. Current commercial assistants—
+including Apple CarPlay's Siri, Google Assistant for Android Auto, and Amazon
+Alexa Auto—are designed for a \emph{single active speaker} issuing commands
+at a time. In practice, however, a car cabin hosts multiple occupants who may
+speak simultaneously, issue overlapping commands, or engage in natural
+conversation while incidentally directing requests at the vehicle's assistant.
+No public benchmark or open-source system currently addresses this
+\emph{in-car multi-speaker ASR} scenario comprehensively.
+
+This paper presents the first end-to-end pipeline for \textbf{In-Car
+Multi-Speaker Automatic Speech Recognition} (InCar-MSAR), evaluated on the
+newly released AISHELL-5 dataset~\cite{aishell5_2025}—the first large-scale,
+publicly available corpus of Mandarin Chinese multi-speaker conversations
+recorded in real automotive environments using a four-microphone array. Our
+system receives a four-channel audio stream (16\,kHz, one microphone per
+door) and produces, for each detected speaker: (i) a clean speech
+transcript, (ii) a speaker role label (Driver or Passenger), and (iii) a
+structured intent representation suitable for vehicle control.
+
+\subsection*{Contributions}
+The main contributions of this work are:
+\begin{enumerate}
+    \item \textbf{First public benchmark on AISHELL-5}: We report
+    Word Error Rate (WER), Concatenated Permutation WER (cpWER), and
+    Speaker Attribution Accuracy on both evaluation sets, establishing
+    strong baselines for future research.
+
+    \item \textbf{Multi-channel separation pipeline}: We demonstrate that
+    combining neural beamforming via SepFormer~\cite{subakan2021attention}
+    with large-scale pre-trained ASR (Whisper~\cite{radford2023robust})
+    yields statistically significant WER reduction compared to
+    single-channel direct transcription.
+
+    \item \textbf{Reproducible open-source system}: The complete pipeline—
+    data loading, separation, ASR, speaker role classification, and intent
+    understanding—is released as a reproducible Python package with a
+    Streamlit demo, Docker image, and evaluation scripts.
+\end{enumerate}
+
+\noindent The remainder of this paper is structured as follows:
+Section~\ref{sec:related} reviews related work;
+Section~\ref{sec:methodology} describes the dataset and proposed architecture;
+Section~\ref{sec:experiments} presents experimental results and ablation
+studies; Section~\ref{sec:conclusion} concludes with future directions.

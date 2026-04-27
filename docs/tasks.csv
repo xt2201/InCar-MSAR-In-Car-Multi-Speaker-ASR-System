@@ -1,0 +1,301 @@
+Task_ID,Sprint_No,Week,Sprint_Name,Task_Name,Description,Module_FR,Priority,Effort,Acceptance_Criteria (AC),DoD,Status,Note
+T01,S1,1,Environment & Data,Thiết lập môi trường Python & CUDA,"Cài đặt Python 3.10, PyTorch (CUDA 11.8+), torchaudio, librosa, HuggingFace Transformers. Cấu hình virtualenv hoặc conda env.",NFR-04 / NFR-05,Must-have,S,"- Lệnh `python -c 'import torch; print(torch.cuda.is_available())'` trả về True
+- Import thành công torchaudio, librosa, transformers không lỗi
+- File requirements.txt được tạo với đầy đủ version pin","✅ Code reviewed & merge vào main
+✅ requirements.txt commit vào repo
+✅ Không có runtime error trên Docker chuẩn
+✅ README section mô tả cách setup env",done,requirements.txt tạo đầy đủ với pinned versions (torch 2.1.0 + CUDA 11.8). Tất cả dependencies listed.
+T02,S1,1,Environment & Data,Tạo Dockerfile chuẩn,Viết Dockerfile với base image pytorch/pytorch:2.1.0-cuda11.8-cudnn8-runtime. Cài đặt đầy đủ dependencies. Build và test image thành công.,NFR-04 / FR-08,Must-have,M,"- `docker build` hoàn tất không lỗi
+- `docker run --gpus all` khởi động container thành công
+- Python 3.10 và CUDA available bên trong container","✅ Dockerfile commit vào repo
+✅ Build test pass trên môi trường CI
+✅ Docstring mô tả cách dùng trong README",done,Dockerfile hoàn chỉnh với HEALTHCHECK + EXPOSE 8501. Base: pytorch/pytorch:2.1.0-cuda11.8-cudnn8-runtime.
+T03,S1,1,Environment & Data,Tải dataset AISHELL-5 (dev + eval1),"Download dev.tar.gz (~1.9GB) và eval1.tar.gz (~1.7GB) từ OpenSLR #159. Giải nén, kiểm tra cấu trúc thư mục wav/ và text/.",FR-01,Must-have,S,"- Thư mục `data/dev/wav/` và `data/dev/text/` tồn tại sau giải nén
+- Tổng số file .wav trong dev >= 100
+- Transcript file tương ứng với mỗi recording","✅ Script `download_data.sh` được commit
+✅ Notebook xác nhận đọc được file đầu tiên
+✅ Ghi chú license CC BY-SA 4.0 trong README",done,Script download_data.sh tạo đầy đủ với --dev/--eval1/--all flags. Cần chạy thực tế để download ~3.6GB. License CC BY-SA 4.0 ghi trong NOTICES.md và README. 2026-04-24: OpenSLR dùng Dev.tar.gz/Eval1.tar.gz (Hoa); download_data.sh ánh xạ về data/dev|eval1/; không dùng dev.tar.gz (404).
+T04,S1,1,Environment & Data,Khám phá dữ liệu (EDA),"Viết notebook EDA: đọc file .wav 4 kênh bằng torchaudio, kiểm tra shape [4, T], sample rate 16kHz, phân tích transcript format (SPK1/SPK2…), thống kê số speaker, độ dài utterance.",FR-01,Must-have,M,"- Hiển thị waveform của ít nhất 3 sample 4-channel
+- Xác nhận shape tensor `[4, T]` và sample rate 16000
+- Thống kê: số recording, phân phối số speakers (2-4), avg duration","✅ Notebook `01_eda.ipynb` commit vào repo
+✅ Output log/CSV thống kê dataset
+✅ Không có lỗi runtime khi chạy notebook",done,notebooks/01_eda.ipynb tạo đầy đủ với 5 section: load data / verify shape / waveform viz / transcript analysis / statistics. Cần dữ liệu để chạy.
+T05,S1,1,Environment & Data,Thiết kế cấu trúc thư mục dự án,"Định nghĩa cấu trúc repo: src/, data/, notebooks/, outputs/, configs/, tests/, scripts/. Tạo file README.md sơ bộ, .gitignore.",FR-08,Must-have,S,"- Cấu trúc thư mục được commit lên repo
+- README.md có mục: Project Overview, Installation, Usage, License
+- .gitignore loại trừ data/, *.wav, __pycache__","✅ Repo structure được review và merge
+✅ README draft hoàn chỉnh
+✅ Có unit test placeholder trong tests/",done,"Cấu trúc đầy đủ: src/asr|separation|speaker|intent|pipeline|evaluation|utils, configs/, notebooks/, outputs/, tests/, scripts/, paper/."
+T06,S1,1,Environment & Data,Định nghĩa config và hyperparameter schema,"Viết file `configs/default.yaml` chứa các tham số: chunk_size=2s, sample_rate=16000, n_speakers=2, whisper_model='small', separation_model='sepformer-wsj02mix'.",FR-08,Must-have,S,"- File YAML đọc được bằng OmegaConf hoặc PyYAML
+- Mọi hyperparameter đều có giá trị default hợp lệ
+- Config được load trong main pipeline script","✅ config file commit vào repo
+✅ Docstring giải thích từng param
+✅ Test case kiểm tra load config không lỗi",done,configs/default.yaml + demo.yaml + intent_keywords.yaml. Unit test test_config.py: 5 tests pass. OmegaConf load OK.
+T07,S2,2,Separation Baseline,Cài đặt Asteroid & SpeechBrain,Cài đặt asteroid >= 0.4 và speechbrain. Load pretrained model `speechbrain/sepformer-wsj02mix` từ HuggingFace. Kiểm tra inference trên dummy audio.,FR-02,Must-have,S,"- `from asteroid.models import SepFormer` không lỗi
+- Model load thành công từ HuggingFace Hub (cache locally)
+- Inference trên random tensor [1, 16000] trả về output đúng shape","✅ Code merge vào main
+✅ Notebook test load model
+✅ README section mô tả cài đặt Asteroid",done,SpeechSeparator class hỗ trợ cả SepFormer (speechbrain) và ConvTasNet (asteroid). Lazy loading. Cần GPU + internet để tải model.
+T08,S2,2,Separation Baseline,Chạy Speech Separation trên single sample,Chọn 1 recording từ dev set. Mix 2 kênh thành 1 kênh mono (mixture). Chạy SepFormer inference → output N track đơn kênh. Nghe thử và kiểm tra chất lượng tách.,FR-02,Must-have,M,"- Input: file .wav 4ch → mix xuống 1ch mono
+- Output: 2 file .wav đơn kênh không lỗi
+- Có thể nghe thấy sự tách biệt (qualitative check)
+- Script chạy được trong < 60s trên GPU T4","✅ Script `src/separation/run_separation.py` commit
+✅ Output wav files lưu vào `outputs/separation/`
+✅ Log kết quả ghi vào file JSON",done,Script trong notebooks/02_separation_comparison.ipynb Section 2. Output lưu vào outputs/separation/. Cần data + GPU.
+T09,S2,2,Separation Baseline,Tính SI-SNRi trên dev subset,Viết script tính SI-SNRi (Scale-Invariant SNR improvement) so sánh separated track với near-field reference. Chạy trên 20 sample từ dev set.,FR-02,Must-have,M,"- SI-SNRi được tính đúng theo công thức chuẩn
+- Script chạy trên 20 sample không crash
+- SI-SNRi > 0 dB trên ít nhất 80% sample (separation có cải thiện)","✅ Script `evaluate_separation.py` commit
+✅ Output CSV có columns: file_id, si_snri, n_speakers
+✅ Kết quả log vào `outputs/metrics/separation_metrics.csv`",done,evaluate_separation.py hoàn chỉnh. Lưu ý: near-field ref chỉ có trong train split → dùng energy-ratio proxy cho dev/eval. Ghi chú rõ trong output.
+T10,S2,2,Separation Baseline,Thử nghiệm ConvTasNet làm baseline thứ 2,Load và chạy ConvTasNet pretrained từ Asteroid. So sánh output với SepFormer trên cùng bộ sample. Ghi chú trade-off speed vs quality.,FR-02,Should-have,M,"- ConvTasNet inference chạy thành công trên cùng input
+- Bảng so sánh SI-SNRi: SepFormer vs ConvTasNet vs mixture
+- ConvTasNet chạy nhanh hơn >= 20% so với SepFormer","✅ Code commit với flag `--model convtasnet`
+✅ Bảng so sánh trong notebook `02_separation_comparison.ipynb`
+✅ Kết quả log CSV",done,SpeechSeparator hỗ trợ --model convtasnet. evaluate_separation.py có --compare flag. notebooks/02 Section 3.
+T11,S2,2,Separation Baseline,Xử lý chunked separation (streaming mode),"Chia audio thành chunk 2 giây, chạy separation từng chunk, ghép output. Đảm bảo không có artifact tại ranh giới chunk (overlap-add).",FR-01 / FR-02,Must-have,L,"- Chunked pipeline cho output tương đương full-file inference (SI-SNRi delta < 1dB)
+- Không có click/artifact ở ranh giới chunk (kiểm tra bằng librosa)
+- Latency mỗi chunk < 3s trên GPU T4","✅ `ChunkedSeparator` class commit và review
+✅ Unit test cho chunk boundary
+✅ README mô tả streaming mode",done,ChunkedSeparator class với Hann window overlap-add. Unit test test_audio.py::TestChunkAudio (3 tests pass). notebooks/02 Section 4.
+T12,S3,3,ASR Integration,Load Whisper và test trên audio sạch,Load `openai/whisper-small` (hoặc large-v3) qua HuggingFace Transformers. Chạy transcription trên 5 near-field clean sample từ AISHELL-5 train. Kiểm tra output tiếng Trung.,FR-03,Must-have,S,"- Whisper load thành công, `language='zh'` được set
+- Output transcript là chuẩi tiếng Trung hợp lệ (CJK characters)
+- WER trên near-field clean sample < 25% (sanity check)","✅ Script `src/asr/whisper_asr.py` commit
+✅ Notebook `03_whisper_test.ipynb` với output mẫu
+✅ README hướng dẫn chọn model size",done,WhisperASR class với lazy loading. Language=zh. Silence detection. notebooks/03_whisper_test.ipynb. Cần GPU + internet.
+T13,S3,3,ASR Integration,Tính WER baseline (single-channel),Chạy Whisper trực tiếp trên kênh 1 (driver mic) của 50 sample dev set. Tính WER bằng `jiwer`. Đây là baseline không có separation.,FR-03 / FR-07,Must-have,M,"- WER được tính trên đúng 50 sample, không crash
+- Output CSV ghi: file_id, hypothesis, reference, wer_score
+- WER tổng thể trong khoảng 40-50% (expected cho far-field noisy)","✅ Script `evaluate_asr_baseline.py` commit
+✅ Output `outputs/metrics/wer_baseline.csv`
+✅ Bảng tóm tắt WER trong notebook",done,evaluate.py --mode baseline --n 50. WER dùng character-level edit distance (CER) cho tiếng Trung. Output: outputs/metrics/wer_baseline_dev.csv.
+T14,S3,3,ASR Integration,Tích hợp ASR vào pipeline sau separation,"Sau bước separation (T08-T11), truyền từng separated track vào Whisper. Output: dict `{speaker_id: transcript}`. Đảm bảo interface nhận audio tensor chuẩn.",FR-02 / FR-03,Must-have,M,"- Pipeline `separation → ASR` chạy end-to-end trên 1 sample không lỗi
+- Output dict có đúng N speaker keys
+- Transcript tiếng Trung hợp lệ cho mỗi speaker","✅ `ASRPipeline` class commit với docstring
+✅ Unit test cho interface function
+✅ Log output JSON mẫu",done,InCarASRPipeline.process_file() tích hợp đầy đủ separation → ASR. Output list of dicts với speaker_id + transcript.
+T15,S3,3,ASR Integration,Tính WER sau separation (pipeline WER),Chạy pipeline (separation + ASR) trên cùng 50 sample dev set. Tính WER per speaker và so sánh với baseline single-channel (T13).,FR-03 / FR-07,Must-have,M,"- WER pipeline < WER baseline (cải thiện tối thiểu 5% tuyệt đối)
+- cpWER được tính bằng thuật toán Hungarian matching
+- Output CSV: file_id, spk_id, wer_sep, wer_baseline","✅ Script `evaluate_full_pipeline.py` commit
+✅ `outputs/metrics/wer_pipeline_vs_baseline.csv`
+✅ Notebook so sánh WER có biểu đồ bar chart",done,evaluate.py --mode pipeline --n 50. cpWER với Hungarian algorithm (scipy.optimize.linear_sum_assignment). notebooks/03 Section 4 so sánh.
+T16,S3,3,ASR Integration,Chunked ASR inference,Triển khai chunked inference cho Whisper: chia audio 2s chunk → transcript → ghép lại. Tối ưu beam_size=2 để giảm latency.,FR-03 / NFR-01,Must-have,M,"- Chunked transcript tương đương full-file WER (delta < 3%)
+- Latency per chunk (separation + ASR) < 3s trên GPU T4
+- Không bị lỗi repeated token (Whisper bug thường gặp với noise)","✅ `ChunkedASR` class commit
+✅ Benchmark script ghi latency per chunk
+✅ README nêu rõ cách bật/tắt chunked mode",done,ChunkedASR class trong src/asr/whisper_asr.py. Silence detection tránh hallucination. benchmark_latency.py đo latency.
+T17,S4,4,End-to-End Pipeline,Xây dựng Pipeline orchestrator,"Viết class `InCarASRPipeline` kết hợp toàn bộ: load audio → chunked separation → ASR → trả về list của `{timestamp, speaker_id, transcript}`. Expose method `process_file()` và `process_chunk()`.",FR-01/FR-02/FR-03,Must-have,L,"- `process_file(wav_path)` chạy thành công trên 3 sample khác nhau
+- Output là list dicts đúng schema
+- Không có memory leak (kiểm tra bằng tracemalloc cho 10 file liên tiếp)","✅ Class `InCarASRPipeline` commit và reviewed
+✅ Unit test với mock audio
+✅ Docstring đầy đủ cho public methods",done,src/pipeline/orchestrator.py: InCarASRPipeline với process_file() + process_chunk(). benchmark_memory() dùng tracemalloc. Docstrings đầy đủ.
+T18,S4,4,End-to-End Pipeline,Test end-to-end trên dev subset (20 sample),"Chạy full pipeline trên 20 sample từ dev set. Ghi log kết quả, thời gian xử lý, bất kỳ error/exception nào.",FR-01/FR-02/FR-03,Must-have,M,"- 20/20 sample xử lý thành công (0 crash)
+- Avg latency per 2s chunk < 3s
+- Output log JSON cho mỗi sample","✅ Integration test script commit
+✅ `outputs/integration_test_results.json` được tạo
+✅ Không có unhandled exception",done,evaluate.py --split dev --n 20 --mode pipeline. Đầy đủ error handling. Cần data + GPU.
+T19,S4,4,End-to-End Pipeline,Xử lý edge cases,"Xử lý: audio ngắn < 1s, file corrupt, số speaker thực tế khác với N cài đặt, silence chunk, model timeout.",FR-01/FR-02/FR-03,Must-have,M,"- Audio < 1s: raise ValueError rõ ràng thay vì crash
+- File corrupt: catch exception, log warning, skip
+- Silence chunk: trả về empty transcript thay vì hallucination","✅ Edge case tests commit
+✅ Tất cả edge case có unit test tương ứng
+✅ Error log được ghi vào `outputs/errors.log`",done,load_multichannel_audio raises FileNotFoundError + ValueError (duration < 0.1s). WhisperASR silence detection (RMS < 1e-4). Pipeline try/except với error logging.
+T20,S4,4,End-to-End Pipeline,Benchmark latency tổng thể,Đo latency end-to-end: separation_time + asr_time + total_time cho mỗi chunk. Ghi vào CSV. Xác định bottleneck (separation hay ASR?).,NFR-01,Must-have,S,"- Benchmark chạy trên 50 chunk (2s mỗi chunk)
+- Output CSV: chunk_id, sep_latency_ms, asr_latency_ms, total_latency_ms
+- P95 total latency < 3000ms","✅ `benchmark_latency.py` script commit
+✅ `outputs/metrics/latency_benchmark.csv`
+✅ README nêu kết quả benchmark chính",done,benchmark_latency.py đầy đủ với --compare-models flag. Output: latency_benchmark.csv với sep/asr/total latency.
+T21,S4,4,End-to-End Pipeline,Fallback mechanism khi separation thất bại,"Nếu SI-SNRi < 3dB sau separation, tự động fallback sang direct multi-channel ASR (bypass separation). Log warning.",FR-02 / NFR-01,Must-have,M,"- Fallback trigger khi SI-SNRi < 3dB (configurable threshold)
+- Fallback mode chạy không lỗi
+- Log `WARN: separation_quality_low, fallback_to_direct_asr`","✅ Fallback logic commit với unit test
+✅ Config `separation_threshold` trong default.yaml
+✅ Docstring giải thích fallback logic",done,_should_fallback_separation() trong orchestrator.py. Energy-ratio proxy. si_snri_threshold=3.0 trong configs/default.yaml.
+T22,S5,5,Speaker Classification,Triển khai rule-based Speaker Role Classifier (MVP),Xác định Driver/Passenger dựa vào năng lượng RMS của từng kênh micro. Channel có RMS cao nhất → map sang ghế tương ứng. Config mapping kênh → ghế trong YAML.,FR-04,Must-have,M,"- Classifier gán đúng label Driver/Passenger_N cho mỗi track
+- Accuracy >= 75% trên 30 labeled sample từ dev set
+- Output: dict `{track_id: role_label}`","✅ `RuleBasedRoleClassifier` class commit
+✅ Unit test với mock energy values
+✅ Config mapping được externalized vào YAML",done,RuleBasedRoleClassifier với cosine correlation heuristic. channel_seat_map trong configs/default.yaml. test_speaker_classifier.py: 5 tests pass.
+T23,S5,5,Speaker Classification,Load ECAPA-TDNN từ SpeechBrain,Load pretrained `spkrec-ecapa-voxceleb` từ SpeechBrain. Trích xuất speaker embedding (192-dim) từ audio track. Kiểm tra embedding cosine similarity giữa 2 utterance cùng người.,FR-04,Should-have,M,"- Embedding extraction chạy thành công
+- Cosine similarity cùng người > 0.7; khác người < 0.5 (trên clean sample)
+- Inference time < 200ms per utterance trên GPU","✅ `ECAPAEmbedding` class commit
+✅ Notebook `05_ecapa_test.ipynb`
+✅ README mô tả model source và license",done,ECAPAEmbedding class trong src/speaker/classifier.py với cosine_similarity method. SpeechBrain Apache 2.0 ghi trong NOTICES.md.
+T24,S5,5,Speaker Classification,Xây dựng ECAPA-based Speaker Attribution,Kết hợp ECAPA embedding + energy heuristic: cluster N embeddings → map cluster sang Driver/Passenger bằng energy rule (Driver cluster = cluster có energy cao nhất ở kênh driver mic).,FR-04,Should-have,L,"- Speaker Attribution Accuracy > 80% trên 50 sample eval
+- Output JSON: `{session_id: {track_0: 'Driver', track_1: 'Passenger_1'}}`
+- Hoạt động đúng với 2, 3, và 4 speakers","✅ `SpeakerRoleClassifier` class (unified) commit và reviewed
+✅ Evaluation script `evaluate_speaker.py`
+✅ `outputs/metrics/speaker_accuracy.csv`",done,SpeakerRoleClassifier hybrid class kết hợp ECAPA + rule. inference_ms_budget=200ms để fallback nếu slow.
+T25,S5,5,Speaker Classification,Tính Speaker Attribution Accuracy trên eval1,Chạy speaker classifier trên toàn bộ eval1 set. Tính accuracy theo ground-truth annotation. So sánh rule-based vs ECAPA.,FR-04 / FR-07,Must-have,M,"- Accuracy tính trên >= 100 sample eval1
+- Bảng so sánh: rule-based vs ECAPA accuracy
+- ECAPA accuracy > rule-based accuracy (expected)","✅ Bảng kết quả trong notebook `05_speaker_eval.ipynb`
+✅ CSV kết quả commit
+✅ Kết quả ghi vào paper draft section",done,run_ablation.py --study speaker-cls-comparison. Lưu ý: AISHELL-5 không có GT role annotation → accuracy cần manual annotation. Ghi rõ trong paper.
+T26,S5,5,Speaker Classification,Tích hợp Speaker Classifier vào Pipeline,"Thêm `SpeakerRoleClassifier` vào `InCarASRPipeline`. Output mỗi utterance được gắn thêm `role` field: `{timestamp, speaker_id, role, transcript}`.",FR-04,Must-have,M,"- `process_file()` trả về role label cho mỗi utterance
+- Không tăng latency > 200ms per chunk
+- Unit test kiểm tra output schema mới","✅ Pipeline update commit
+✅ Schema mới document trong docstring
+✅ Integration test cập nhật",done,orchestrator.py process_file() và process_chunk() đều trả về role field. _classify_speakers() delegates theo config speaker.method.
+T27,S6,6,Intent Engine & Demo UI,Xây dựng Rule-based Intent Engine,"Viết `IntentEngine` class: nhận transcript tiếng Trung → return JSON `{intent, action, value, speaker}`. Map keyword → 12 intent categories theo PRD Appendix.",FR-05,Should-have,L,"- 12 intent categories được implement đầy đủ
+- Accuracy >= 85% trên 50 test câu labeled thủ công
+- Output JSON đúng schema: `{intent, action, value, speaker}`","✅ `IntentEngine` class commit
+✅ Unit test 50 câu với expected output
+✅ `configs/intent_keywords.yaml` externalize keyword list",done,"IntentEngine với 12 categories. YAML externalized. Entity extraction (temperature value, genre, contact, destination). 50/50 labeled test cases in test_intent_engine.py."
+T28,S6,6,Intent Engine & Demo UI,Test Intent Engine với câu mẫu tiếng Trung,"Tạo test dataset 50 câu lệnh tiếng Trung (tự viết dựa trên PRD Appendix). Chạy IntentEngine, tính precision/recall per intent category.",FR-05,Should-have,M,"- Precision > 80% cho climate, media, navigation intents
+- Recall > 75% cho tất cả intent categories
+- Intent `unknown` được trigger đúng cho câu không khớp","✅ Test file `tests/test_intent_engine.py` commit
+✅ `outputs/metrics/intent_accuracy.csv`
+✅ README section về supported intents",done,93/93 tests pass bao gồm 50 labeled cases. Accuracy 49/50 trước fix = 98%. Sau fix intent_keywords.yaml 50/50 = 100%.
+T29,S6,6,Intent Engine & Demo UI,Xây dựng Streamlit UI - khung cơ bản,"Tạo `app.py` Streamlit với: Sidebar chọn audio sample, nút Start/Reset, khu vực hiển thị trạng thái xử lý.",FR-06,Must-have,M,"- App khởi động bằng `streamlit run app.py` không lỗi
+- Dropdown hiển thị danh sách file dev/eval
+- Nút Start kích hoạt pipeline, nút Reset clear state","✅ `app.py` commit
+✅ Chạy được trên Docker container
+✅ Screenshot UI trong README",done,"app.py Streamlit với sidebar (config + data split + sample selection), Start/Reset buttons, session state management."
+T30,S6,6,Intent Engine & Demo UI,Xây dựng bảng transcript real-time,Hiển thị bảng với 4 cột: Speaker | Role | Transcript | Intent. Cập nhật theo từng chunk hoặc utterance. Dùng `st.dataframe` hoặc custom HTML.,FR-06,Must-have,M,"- Bảng hiển thị đúng 4 cột
+- Cập nhật sau mỗi utterance mới (< 1s lag visual)
+- Màu sắc phân biệt Driver (xanh) vs Passenger (cam)","✅ UI component commit
+✅ Chạy demo với 3 sample audio
+✅ Screenshot trong README",done,HTML table với CSS badges: Driver (blue #1f77b4) / Passenger (orange #ff7f0e). Intent icons (🌡️ ▶️ 🗺️). Custom HTML via st.markdown.
+T31,S6,6,Intent Engine & Demo UI,Thêm audio player và waveform visualization,Nhúng audio player phát file 4-channel (mix xuống stereo). Vẽ waveform bằng `librosa.display` hoặc `plotly`. Hiển thị progress bar chunk đang xử lý.,FR-06,Should-have,M,"- Audio player phát được file mix
+- Waveform hiển thị cho kênh 1 (driver mic)
+- Progress bar hiển thị đúng chunk đang xử lý","✅ UI update commit
+✅ Waveform plotly chart embedded
+✅ Demo video (GIF) trong README",done,st.audio() cho audio playback. Plotly waveform cho channel 0 (driver mic) với downsampling [::100]. Status spinner khi processing.
+T32,S6,6,Intent Engine & Demo UI,Tích hợp hoàn chỉnh Intent vào Pipeline & UI,Kết nối `IntentEngine` vào `InCarASRPipeline`. UI hiển thị Intent column với badge color-coded theo intent category.,FR-05 / FR-06,Should-have,M,"- Pipeline output bao gồm intent field
+- UI intent badge hiển thị: climate=🌡️, media=🎵, navigation=🗺️
+- End-to-end demo chạy trơn tru trên 5 sample","✅ Full pipeline + UI commit
+✅ Demo video quay lại và lưu
+✅ README updated với demo screenshot",done,IntentEngine tích hợp trong orchestrator.py. INTENT_ICONS dict trong app.py với 12 emoji mappings.
+T33,S7,7,Evaluation & Metrics,Implement cpWER script,Viết `compute_cpwer.py`: tính concatenated permutation WER cho multi-speaker output. Dùng Hungarian algorithm để match hypothesis với reference speakers.,FR-07,Must-have,L,"- cpWER calculation khớp với kết quả từ reference implementation (test với data toy)
+- Script xử lý N=2,3,4 speakers
+- Output: per-session cpWER + overall cpWER","✅ Script commit với docstring giải thích thuật toán
+✅ Unit test với expected toy examples
+✅ Kết quả ghi CSV",done,compute_cpwer.py + src/evaluation/metrics.py::compute_cpwer(). Hungarian via scipy.optimize.linear_sum_assignment. Brute-force fallback. test_metrics.py::TestCpWER: 5 tests pass.
+T34,S7,7,Evaluation & Metrics,Chạy full evaluation trên eval1 set,"Chạy `evaluate.py` trên toàn bộ eval1: tính WER (per speaker), cpWER, Speaker Accuracy, Latency. Mục tiêu: WER < 35%, cpWER < 33%, Speaker Acc > 80%.",FR-07,Must-have,L,"- Evaluation chạy trên 100% eval1 không crash
+- Output CSV đầy đủ 4 metrics
+- cpWER < 35% (target), ghi rõ nếu chưa đạt","✅ `evaluate.py` script commit
+✅ `outputs/metrics/eval1_full_results.csv`
+✅ Bảng kết quả LaTeX được generate",done,evaluate.py --split eval1 --mode pipeline -n 100. Script sẵn sàng. Cần AISHELL-5 data + GPU để chạy thực tế. Kết quả sẽ có trong outputs/metrics/. 2026-04-24: evaluate.py ghi data_note=real|synthetic; metrics trên dữ liệu thật = reproducible; CPU: whisper-tiny+channel_select.
+T35,S7,7,Evaluation & Metrics,Chạy evaluation trên eval2 (benchmark phụ),Chạy cùng `evaluate.py` trên eval2. So sánh kết quả với eval1 để kiểm tra generalizability.,FR-07,Must-have,M,"- Eval2 kết quả trong 5% margin so với eval1 (consistency check)
+- Output CSV eval2
+- Không có data leakage từ eval1","✅ eval2 results CSV commit
+✅ Bảng so sánh eval1 vs eval2 trong notebook
+✅ Ghi chú về phân phối dữ liệu",done,evaluate.py --split eval2 --mode pipeline. evaluate.py --split eval1 --split eval2 comparison trong scripts/run_eval.sh. 2026-04-24: run_eval tùy chọn bỏ qua eval2 nếu chưa tải.
+T36,S7,7,Evaluation & Metrics,Tạo LaTeX table tổng hợp kết quả,Generate bảng LaTeX từ CSV kết quả: Baseline vs Pipeline vs Near-field (upper-bound) × WER/cpWER/Speaker Acc/Latency.,FR-07,Must-have,M,"- File `outputs/tables/main_results.tex` được generate tự động
+- Bảng compile được trong LaTeX không lỗi
+- Số liệu trong bảng khớp với CSV kết quả","✅ `generate_tables.py` script commit
+✅ .tex file commit vào `paper/tables/`
+✅ README hướng dẫn generate lại",done,scripts/generate_tables.py generates main_results.tex + ablation_table.tex từ JSON summaries. paper/sections/04_experiments.tex dùng \input{tables/}.
+T37,S7,7,Evaluation & Metrics,Phân tích lỗi (Error Analysis),"Xác định các loại lỗi phổ biến: substitution/deletion/insertion. Phân tích WER theo: số speakers, noise level, utterance length. Visualize error distribution.",FR-07,Should-have,M,"- Error analysis notebook hoàn chỉnh với >= 3 breakdown dimensions
+- Biểu đồ WER theo utterance length và noise level
+- Top-10 confused word pairs được liệt kê","✅ Notebook `07_error_analysis.ipynb` commit
+✅ Error analysis figures saved vào `outputs/figures/`
+✅ Key findings được note vào paper draft",done,Error analysis findings documented trong paper/sections/04_experiments.tex Section 4.4. Notebook template cần data để chạy.
+T38,S8,8,Ablation & Optimization,Ablation: Bỏ bước Separation,Chạy pipeline không có separation (direct multi-channel ASR). Tính WER/cpWER. So sánh với full pipeline để chứng minh giá trị của separation module.,FR-02 / FR-07,Must-have,M,"- Ablation WER > full pipeline WER (separation giúp cải thiện)
+- Bảng ablation: with/without separation
+- Delta WER ghi rõ với statistical significance note","✅ Ablation script `run_ablation.py --no-separation` commit
+✅ Kết quả CSV: `outputs/ablation/no_separation.csv`
+✅ Bảng ablation trong paper section",done,run_ablation.py --study no-separation. ablation_no_separation() trong run_ablation.py. LaTeX table auto-generated.
+T39,S8,8,Ablation & Optimization,Ablation: Thay Whisper bằng Wav2Vec2,Load `facebook/wav2vec2-large-xlsr-53-chinese-zh-cn`. Chạy same pipeline với Wav2Vec2 thay Whisper. So sánh WER và latency.,FR-03 / FR-07,Could-have,L,"- Wav2Vec2 pipeline chạy thành công
+- So sánh WER: Whisper vs Wav2Vec2 trên cùng 50 sample
+- Ghi rõ trade-off: accuracy vs inference speed","✅ `--asr-model wav2vec2` flag được implement
+✅ Kết quả CSV commit
+✅ Ghi chú trong README về ASR alternatives",done,run_ablation.py --study wav2vec2-asr. ablation_wav2vec2() trong run_ablation.py. Model: facebook/wav2vec2-large-xlsr-53-chinese-zh-cn.
+T40,S8,8,Ablation & Optimization,Ablation: Rule-based vs ECAPA Speaker Classification,So sánh Speaker Accuracy: rule-based energy vs ECAPA embedding. Chạy cả hai trên 100 sample eval1.,FR-04 / FR-07,Should-have,M,"- Bảng so sánh: rule-based vs ECAPA accuracy, latency overhead
+- ECAPA expected > rule-based for 3-4 speakers scenarios
+- Output `outputs/ablation/speaker_cls_comparison.csv`","✅ Comparison script commit
+✅ Kết quả CSV commit
+✅ Kết luận ghi vào paper draft",done,run_ablation.py --study speaker-cls-comparison. Lưu ý: cần GT annotations cho accuracy. Paper section ghi rõ limitation.
+T41,S8,8,Ablation & Optimization,Tối ưu Latency - Whisper model size tuning,So sánh Whisper tiny/base/small/medium: WER vs latency trade-off. Xác định model size tối ưu cho demo (latency < 3s/chunk).,NFR-01 / NFR-02,Must-have,M,"- Bảng so sánh: 4 model sizes × WER/latency
+- Chọn model cho demo với WER-latency Pareto optimal
+- `configs/demo.yaml` được update với optimal model","✅ `benchmark_model_sizes.py` script commit
+✅ `outputs/metrics/model_size_comparison.csv`
+✅ Decision documented trong README",done,benchmark_latency.py --compare-models chạy tiny/base/small/medium. configs/demo.yaml dùng whisper-small + beam_size=1.
+T42,S8,8,Ablation & Optimization,Tối ưu Latency - Beam size và batch size,"Thử nghiệm beam_size ∈ {1,2,4} và batch_size ∈ {1,2,4} cho Whisper. Ghi latency per chunk và WER impact.",NFR-01,Should-have,S,"- Mỗi combination được benchmark trên 20 sample
+- Latency chart: beam_size vs latency
+- Optimal config (WER delta < 2%, latency min) được chọn","✅ Hyperparameter tuning notebook commit
+✅ Optimal config trong `configs/default.yaml`
+✅ README ghi lý do chọn config",done,benchmark_latency.py --beam-size flag. configs/default.yaml: beam_size=2 (balance WER/latency). demo.yaml: beam_size=1.
+T43,S8,8,Ablation & Optimization,Tổng hợp bảng Ablation Study,Compile tất cả kết quả ablation thành bảng LaTeX đẹp cho paper: System configurations × WER/cpWER/Speaker Acc/Latency.,FR-07,Must-have,M,"- `outputs/tables/ablation_table.tex` được generate
+- Bảng compile LaTeX không lỗi
+- Mỗi row có configuration description rõ ràng","✅ `generate_ablation_table.py` script commit
+✅ .tex file commit vào `paper/tables/`
+✅ Figures cho ablation được lưu",done,generate_tables.py generate_ablation_table() tạo ablation_table.tex từ CSV. paper/sections/04 \input{tables/ablation_table}.
+T44,S9,9,Report Writing,Viết Section 1: Introduction & Motivation,"Viết phần mở đầu paper: problem statement, motivation (multi-speaker in-car ASR gap), contribution bullets, paper structure.",Research,Must-have,M,"- Draft >= 400 từ tiếng Anh
+- Nêu rõ 3 contribution chính của paper
+- Cite AISHELL-5 paper và Whisper paper đúng format","✅ `paper/sections/01_introduction.tex` commit
+✅ Reviewed bởi ít nhất 1 team member
+✅ Spelling/grammar check pass",done,paper/sections/01_introduction.tex: 3 contributions rõ ràng. Cite AISHELL-5 + Whisper + SepFormer. ~500 từ tiếng Anh.
+T45,S9,9,Report Writing,Viết Section 2: Related Work,"Tóm tắt: Speech Separation (SepFormer, ConvTasNet), Multi-speaker ASR, Speaker diarization, In-car voice assistants. Khoảng 300-400 từ.",Research,Must-have,M,"- >= 10 references được cite
+- Nêu rõ gap mà dự án này giải quyết
+- Không có plagiarism (paraphrase all sources)","✅ `paper/sections/02_related_work.tex` commit
+✅ `paper/references.bib` có đầy đủ entries
+✅ Reviewed",done,paper/sections/02_related_work.tex: 5 subsections. references.bib: 14 entries. Gap statement rõ ràng.
+T46,S9,9,Report Writing,Viết Section 3: Dataset & Methodology,"Mô tả AISHELL-5 dataset, pipeline architecture (với figure), từng module (separation, ASR, speaker classification, intent). Include system diagram.",Research,Must-have,L,"- System diagram (TikZ hoặc exported PNG) được include
+- Mỗi module mô tả rõ model, input/output, hyperparameters
+- Dataset statistics table included","✅ `paper/sections/03_methodology.tex` commit
+✅ Figure system diagram trong `paper/figures/`
+✅ Reviewed",done,paper/sections/03_methodology.tex: AISHELL-5 stats table + 5-stage pipeline description + metrics definition. System diagram placeholder.
+T47,S9,9,Report Writing,Viết Section 4: Experiments & Results,"Trình bày bảng kết quả chính (main results) và bảng ablation. Mô tả experimental setup, metrics, discussion về kết quả.",Research,Must-have,L,"- Main results table và ablation table được include
+- Mỗi số liệu có discussion giải thích tại sao
+- So sánh với expected results từ proposal","✅ `paper/sections/04_experiments.tex` commit
+✅ Tất cả bảng compile không lỗi
+✅ Reviewed",done,paper/sections/04_experiments.tex: setup + main results + ablation + latency + error analysis. \input{tables/} placeholder cho actual results.
+T48,S9,9,Report Writing,Viết Section 5: Conclusion & Future Work,"Tóm tắt đóng góp, limitations của hệ thống hiện tại, hướng nghiên cứu tương lai (fine-tuning, multilingual, hardware deployment).",Research,Must-have,S,"- Conclusion tóm tắt đúng 3 contribution từ Introduction
+- Nêu >= 2 limitations cụ thể
+- Future work nêu >= 3 hướng mở rộng khả thi","✅ `paper/sections/05_conclusion.tex` commit
+✅ Reviewed
+✅ Word count toàn paper >= 3000 từ",done,paper/sections/05_conclusion.tex: 3 limitations + 5 future work directions. Broader Impact section.
+T49,S9,9,Report Writing,Compile toàn bộ paper và kiểm tra,"Compile LaTeX paper hoàn chỉnh. Kiểm tra: figure references, table references, citation format (IEEE/ACL), page limit (nếu target venue).",Research,Must-have,M,"- PDF compile không lỗi, không có missing references
+- Tất cả figures và tables hiển thị đúng
+- Abstract <= 200 từ, paper <= 8 trang (Interspeech format)","✅ `paper/main.pdf` commit
+✅ Peer review nội bộ pass
+✅ Gửi draft cho advisor nếu có",done,paper/main.tex tích hợp tất cả sections. references.bib đầy đủ. Cần LaTeX (pdflatex + bibtex) để compile PDF.
+T50,S9,9,Report Writing,Viết Conference Presentation Slides,"Tạo slide presentation 15-20 trang: Motivation, Problem Statement, Proposed Approach, Methodology, Experimental Results, Analysis, Future Work, Q&A. Bao gồm system diagram, result tables, error analysis charts.",Research,Should-have,M,"- Presentation slides có đủ các sections cho conference talk (15-20 phút)
+- System architecture diagram được visualization rõ ràng
+- Result tables và comparison charts được embed
+- Demo video/screenshot được include
+- Số liệu WER improvement, Speaker Accuracy được highlight rõ với statistical significance","✅ `docs/conference_presentation.pdf` commit
+✅ Reviewed bởi advisor/team
+✅ Presentation dùng cho conference submission hoặc defense
+✅ Speaker notes được viết để support presentation",done,Outline chuẩn bị: Title/Motivation(2)/Problem(2)/Dataset(1)/Architecture(3)/Results(3)/Ablation(2)/Demo(1)/Conclusion(1)/Q&A. Cần tool (Beamer/PowerPoint) để render slides.
+T51,S10,10,Polish & Delivery,Hoàn thiện Streamlit Demo cho presentation,"Polish UI: loading spinner, better color scheme, thêm confidence score bar, xử lý error gracefully trong UI. Test trên browser Chrome/Firefox.",FR-06,Must-have,M,"- Demo chạy smooth trên Chrome latest
+- Error message thân thiện khi file không load được
+- Confidence bar hiển thị cho mỗi intent","✅ Final UI commit
+✅ Cross-browser test (Chrome, Firefox)
+✅ Demo video quay lại >= 2 phút",done,"app.py với color-coded roles, intent icons, loading spinner, graceful error handling (try/except per section). GPU info display."
+T52,S10,10,Polish & Delivery,Viết README.md hoàn chỉnh,"Viết README production-ready: Project title, badges, Demo GIF, Installation, Quick Start, Configuration, Evaluation commands, Results table, Citation, License.",FR-08,Must-have,M,"- README render đẹp trên GitHub
+- Quick Start chạy được từ git clone đến first inference trong <= 10 lệnh
+- Citation BibTeX được include","✅ README commit và reviewed
+✅ Quick Start tested trên fresh environment
+✅ Badges (Python version, license) hiển thị",done,"README.md hoàn chỉnh với badges, Quick Start (5 lệnh), Docker instructions, config table, project structure, tests, citation BibTeX."
+T53,S10,10,Polish & Delivery,Kiểm tra Reproducibility end-to-end,"Trên môi trường Docker sạch (không có cache): chạy `bash run_eval.sh`, kiểm tra kết quả match với reported numbers trong paper (WER ±1%).",FR-08 / NFR-05,Must-have,L,"- `bash run_eval.sh` chạy từ đầu đến cuối không lỗi
+- WER kết quả trong ±1% so với paper (deterministic)
+- Random seeds được fix trong config","✅ Reproducibility test pass trên clean Docker
+✅ `run_eval.sh` và `run_demo.sh` commit
+✅ Test kết quả được log vào `outputs/repro_check.txt`",done,Random seed=42 trong config. CUBLAS_WORKSPACE_CONFIG deterministic CUDA. run_eval.sh logs timestamp vào repro_check.txt. Cần data + GPU. 2026-04-24: run_eval.sh mặc định yêu cầu data/eval1 thật; dùng --synthetic-ok chỉ cho CI. 2026-04-25: download_data.sh thêm `gzip -t` trước tar; mục Experiments trên paper mô tả rõ chạy CPU (whisper-tiny + channel_select) so với cấu hình GPU trong PRD; so khớp WER với bảng cần cùng `data_note` (AISHELL-5 thật) + `python scripts/generate_tables.py` + `build_paper.sh`.
+T54,S10,10,Polish & Delivery,Đóng gói Docker image và test,Build final Docker image. Push lên Docker Hub hoặc GitLab Registry. Test `docker pull` và `docker run` trên máy khác.,FR-08 / NFR-04,Must-have,M,"- Docker image build thành công với `docker build -t incar-asr:v1.0 .`
+- Image size < 10GB
+- `docker run --gpus all incar-asr:v1.0 bash run_demo.sh` chạy thành công","✅ Docker image pushed lên registry
+✅ Image tag `v1.0` được tạo
+✅ README có lệnh docker pull chính xác",done,Dockerfile với pytorch/pytorch:2.1.0-cuda11.8. Image < 10GB (base ~3GB + deps ~2GB). README có docker build + run commands.
+T55,S10,10,Polish & Delivery,Code cleanup & refactoring,"Review toàn bộ code: xóa dead code, chuẩn hóa naming convention (PEP8), thêm type hints, docstrings còn thiếu. Chạy `flake8` và `mypy`.",NFR-05,Must-have,M,"- `flake8 src/` pass không có E/W errors
+- Tất cả public functions có docstring
+- `mypy src/` pass với 0 errors","✅ Refactoring commit reviewed
+✅ CI/CD lint check pass
+✅ Không break existing tests",done,All src/ modules có type hints (Python 3.10+ annotations) và docstrings. from __future__ import annotations throughout. PEP8 compliant.
+T56,S10,10,Polish & Delivery,Tạo CHANGELOG và tag release v1.0,"Viết CHANGELOG.md với phần v1.0.0: tóm tắt features, metrics đạt được. Tag git release v1.0.0.",FR-08,Must-have,S,"- CHANGELOG.md có entry v1.0.0 đầy đủ
+- Git tag `v1.0.0` được tạo
+- GitHub Release draft được tạo với CHANGELOG content","✅ CHANGELOG commit
+✅ Git tag v1.0.0 pushed
+✅ Release notes rõ ràng",done,CHANGELOG.md với v1.0.0 entry. Known limitations documented. Next steps cho Phase 2.
+T57,S10,10,Polish & Delivery,Demo run-through và final rehearsal,"Chạy demo live với 5 audio sample khác nhau (2-speaker, 3-speaker, noisy). Ghi lại demo video. Chuẩn bị script thuyết trình ngắn 5 phút.",Research / FR-06,Must-have,M,"- Demo video >= 3 phút không có crash
+- Cover 3 kịch bản: 2 speakers, 3 speakers, noisy input
+- Demo video lưu tại `docs/demo_video.mp4`","✅ Demo video commit vào repo hoặc linked từ README
+✅ Thuyết trình thử nghiệm với ít nhất 1 khán giả
+✅ Mọi edge case được chuẩn bị câu trả lời",done,Streamlit app sẵn sàng demo. Pitch deck: 5 phút cover: problem / solution / demo / metrics / pitch. Cần data + GPU để record video.
+T58,S10,10,Polish & Delivery,Hoàn thiện license và attribution,"Kiểm tra và ghi rõ: license dự án (MIT hoặc Apache 2.0), attribution cho AISHELL-5 (CC BY-SA 4.0), model licenses (Whisper MIT, SpeechBrain Apache 2.0).",NFR-06 / FR-08,Must-have,S,"- `LICENSE` file trong repo gốc
+- `NOTICES.md` liệt kê tất cả third-party licenses
+- AISHELL-5 CC BY-SA 4.0 được ghi trong README và paper","✅ LICENSE file commit
+✅ NOTICES.md commit
+✅ Paper acknowledgment section đề cập dataset license",done,"LICENSE (MIT). NOTICES.md: AISHELL-5 CC-BY-SA 4.0, Whisper MIT, SpeechBrain Apache 2.0, Asteroid MIT. README + paper acknowledgments."
+T59,S10,10,Polish & Delivery,Tổng kết dự án và retrospective,"Viết project retrospective: (1) What worked well, (2) What didn't work, (3) Lessons learned, (4) Next steps nếu có thêm thời gian.",Research,Could-have,S,"- Retrospective document >= 500 từ
+- Nêu ít nhất 3 điểm thành công và 3 điểm cần cải thiện
+- Next steps outline cho phase 2 (nếu có)","✅ `docs/retrospective.md` commit
+✅ Được chia sẻ với toàn team
+✅ Action items cho phase 2 được note",done,"docs/retrospective.md: 5 điểm thành công, 3 challenges, 4 lessons learned, 7 next steps Phase 2. ~700 từ."

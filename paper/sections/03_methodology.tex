@@ -1,0 +1,116 @@
+% ============================================================
+% Section 3: Dataset & Methodology
+% ============================================================
+
+\section{Dataset \& Methodology}
+\label{sec:methodology}
+
+\subsection{AISHELL-5 Dataset}
+\label{subsec:dataset}
+
+AISHELL-5~\cite{aishell5_2025} is a Mandarin Chinese multi-speaker speech
+corpus recorded in real vehicle cabins. Key characteristics:
+
+\begin{itemize}
+    \item \textbf{Recording setup}: Four directional microphones mounted at
+    each car door (16\,kHz, 4-channel), yielding far-field recordings of
+    natural cabin conversation.
+    \item \textbf{Speakers}: 165 speakers, 2–4 per session, across 60+
+    driving scenarios (highway, urban, parked).
+    \item \textbf{Scale}: \textasciitilde100 hours total;
+    $\sim$1.9\,GB \textit{dev} and $\sim$1.7\,GB \textit{eval1} subsets
+    used for our experiments.
+    \item \textbf{Supervision}: Precise per-speaker transcripts; near-field
+    headset recordings (clean reference) available only in the training split.
+    \item \textbf{License}: CC BY-SA 4.0 (OpenSLR \#159).
+\end{itemize}
+
+Dataset statistics for the \textit{dev} and \textit{eval1} splits used in
+this work are summarized in Table~\ref{tab:dataset}.
+
+\begin{table}[h]
+\centering
+\caption{AISHELL-5 subset statistics used in experiments.}
+\label{tab:dataset}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Split} & \textbf{Size} & \textbf{\# Sessions} & \textbf{Avg. Duration}\\
+\midrule
+dev   & 1.9 GB & see EDA & see EDA \\
+eval1 & 1.7 GB & see EDA & see EDA \\
+eval2 & 1.8 GB & see EDA & see EDA \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent\textit{Exact counts are populated by running \texttt{python evaluate.py --split dev --n -1}.}
+
+\subsection{System Architecture}
+\label{subsec:architecture}
+
+Figure~\ref{fig:pipeline} illustrates the proposed five-stage pipeline.
+
+\begin{figure}[h]
+\centering
+% \includegraphics[width=\columnwidth]{figures/system_diagram.png}
+\fbox{\parbox{0.9\columnwidth}{\centering
+\textbf{[Insert system\_diagram.png here]}\\
+4-ch WAV $\to$ Separation $\to$ ASR $\to$\\
+Speaker Role Classifier $\to$ Intent Engine}}
+\caption{InCar-MSAR pipeline architecture. Four-channel audio
+is chunked at 2\,s intervals, mixed to mono, separated into $N$ tracks
+by SepFormer, transcribed by Whisper, role-classified by an energy-based
+rule classifier (with optional ECAPA-TDNN), and parsed by a keyword
+intent engine.}
+\label{fig:pipeline}
+\end{figure}
+
+\subsubsection{Stage 1 – Multi-Channel Input}
+Audio is loaded as a tensor of shape $[4, T]$ at 16\,kHz using
+\texttt{torchaudio}. For streaming inference, the signal is segmented into
+overlapping 2-second chunks (0.2\,s overlap-add) using a Hann window to
+eliminate boundary artifacts.
+
+\subsubsection{Stage 2 – Speech Separation}
+Each chunk is mixed to mono ($[1, T]$) and processed by
+SepFormer~\cite{subakan2021attention} (\texttt{speechbrain/sepformer-wsj02mix}),
+yielding $N$ single-channel tracks. We configure $N\,{=}\,2$ for the majority
+of sessions; the pipeline supports up to $N\,{=}\,4$. A fallback mechanism
+bypasses separation and uses individual microphone channels directly when the
+estimated separation quality (SI-SNRi proxy) falls below a 3\,dB threshold.
+
+\subsubsection{Stage 3 – Automatic Speech Recognition}
+Each separated track is transcribed using
+Whisper-small~\cite{radford2023robust} (\texttt{openai/whisper-small},
+$\approx$244\,M parameters) with \texttt{language="zh"}, beam size 2.
+Silent chunks (RMS\,$<\,10^{-4}$) are detected and skipped to prevent
+Whisper hallucination.
+
+\subsubsection{Stage 4 – Speaker Role Classification}
+An energy-based heuristic assigns the track most correlated with microphone
+channel\,0 (driver-side door) the label \textit{Driver}; remaining tracks
+are labeled \textit{Passenger\_N}. Optionally, ECAPA-TDNN~\cite{desplanques2020ecapa}
+embeddings (\texttt{speechbrain/spkrec-ecapa-voxceleb}) are used for
+session-level speaker clustering.
+
+\subsubsection{Stage 5 – Intent Engine}
+A keyword-matching engine maps Mandarin transcripts to 12 intent categories
+(climate control, media, navigation, window, phone). Patterns are defined in
+a human-readable YAML file and support entity extraction (e.g., temperature
+values, music genres).
+
+\subsection{Evaluation Metrics}
+\label{subsec:metrics}
+
+\begin{description}
+    \item[WER] Per-speaker character error rate, computed as
+    $\text{WER} = (S + D + I) / N_{\text{ref}}$ over Chinese characters
+    (no word boundaries).
+    \item[cpWER] Concatenated Permutation WER~\cite{watanabe2020chime6}:
+    the minimum WER over all $N!$ permutations of hypothesis-to-reference
+    speaker assignments, solved by the Hungarian algorithm.
+    \item[Speaker Accuracy] Proportion of sessions where speaker roles
+    are assigned correctly to all tracks.
+    \item[Latency] Wall-clock time per 2-second chunk, measured on an
+    NVIDIA T4 GPU (Docker, CUDA 11.8).
+\end{description}

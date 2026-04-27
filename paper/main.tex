@@ -1,0 +1,65 @@
+% ============================================================
+% InCar-MSAR: In-Car Multi-Speaker ASR with AISHELL-5
+% Paper format: Interspeech 2025/2026 (single-column, ≤8 pages)
+% ============================================================
+\documentclass[a4paper]{article}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{microtype}
+\usepackage{array}
+\usepackage{parskip}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{natbib}
+
+% ─── Title ────────────────────────────────────────────────
+\title{InCar-MSAR: An End-to-End Pipeline for In-Car\\
+Multi-Speaker Automatic Speech Recognition\\
+with the AISHELL-5 Dataset}
+
+\author{%
+    [Author Name]\\
+    \relax[Institution]\\
+    \texttt{[email]}%
+}
+
+\date{}
+
+% ─── Document ─────────────────────────────────────────────
+\begin{document}
+
+\maketitle
+
+% Abstract
+\begin{abstract}
+We present InCar-MSAR, the first open-source end-to-end pipeline for
+in-car multi-speaker automatic speech recognition (ASR) evaluated on
+AISHELL-5—a newly released large-scale dataset of four-microphone Mandarin
+Chinese cabin conversations. Our system combines pre-trained neural speech
+separation (SepFormer), large-scale multilingual ASR (Whisper), energy-based
+speaker role classification (Driver/Passenger), and a rule-based intent engine.
+We establish the first published WER and cpWER benchmarks on AISHELL-5 eval1,
+demonstrate significant WER improvement over single-channel baselines, and
+release the complete reproducible codebase with a live Streamlit demo.
+\end{abstract}
+
+% ─── Sections ──────────────────────────────────────────────
+\input{sections/01_introduction}
+\input{sections/02_related_work}
+\input{sections/03_methodology}
+\input{sections/04_experiments}
+\input{sections/05_conclusion}
+
+% ─── Acknowledgments ───────────────────────────────────────
+\section*{Acknowledgments}
+We thank the AISHELL team for releasing AISHELL-5 under CC BY-SA 4.0.
+This work uses Whisper (MIT License), SpeechBrain (Apache 2.0), and Asteroid (MIT License).
+
+% ─── References ────────────────────────────────────────────
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}

@@ -1,0 +1,79 @@
+# Dataset (large binary files — stored on HuggingFace xt2201/InCar-MSAR)
+data/
+*.wav
+*.flac
+*.mp3
+*.tar.gz
+*.zip
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Jupyter Notebooks checkpoints
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Model cache
+.cache/
+*.cache/
+*.pt
+*.pth
+*.bin
+*.safetensors
+
+# Output artifacts (keep structure, not data)
+outputs/metrics/*.csv
+outputs/figures/*.png
+outputs/figures/*.pdf
+outputs/separation/*.wav
+outputs/ablation/*.csv
+
+# Environment — copy .env.example → .env and set HF_TOKEN
+.env
+.env.local
+*.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Docker
+.docker/
+
+# LaTeX build artifacts
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/*.toc
+paper/*.blg
+paper/*.bbl
+paper/*.fls
+paper/*.fdb_latexmk
+paper/*.synctex.gz
+paper/main.pdf
+
+# CI/CD
+.github/workflows/*.yml
+
+# Misc
+*.tmp
+*.bak
+repro_check.txt

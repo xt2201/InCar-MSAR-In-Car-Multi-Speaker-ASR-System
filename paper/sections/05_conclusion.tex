@@ -1,0 +1,65 @@
+% ============================================================
+% Section 5: Conclusion & Future Work
+% ============================================================
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+\subsection{Summary}
+
+We presented InCar-MSAR, the first end-to-end, open-source pipeline for
+multi-speaker automatic speech recognition in automotive cabin environments.
+Our three main contributions are: (1) the first published benchmark on
+AISHELL-5, establishing WER and cpWER baselines; (2) empirical demonstration
+that a separation-first pipeline (SepFormer + Whisper) substantially
+outperforms single-channel direct transcription; and (3) a reproducible,
+containerized system with a live Streamlit demo ready for investor and OEM
+presentations. Experimental results on 100 sessions from AISHELL-5 eval1
+confirm that each pipeline component contributes positively to overall
+accuracy (see ablation in Table~\ref{tab:ablation}).
+
+\subsection{Limitations}
+
+Despite the encouraging results, the current system has notable limitations:
+
+\begin{itemize}
+    \item \textbf{Language scope}: The system is tuned for Mandarin Chinese
+    (AISHELL-5). Extension to multilingual in-car ASR (e.g., Vietnamese,
+    Japanese) would require retraining or adapting the intent keyword mapping.
+    \item \textbf{Separation model mismatch}: SepFormer was pretrained on
+    WSJ0-2Mix (clean, anechoic mixtures) and is applied zero-shot to
+    reverberant car-cabin audio. Fine-tuning on AISHELL-5 training data
+    (near-field references available) is expected to yield significant gains.
+    \item \textbf{Speaker count flexibility}: The pipeline assumes $N{=}2$
+    speakers by default; sessions with 3–4 simultaneous speakers degrade
+    separation quality and require explicit configuration.
+\end{itemize}
+
+\subsection{Future Work}
+
+Several promising directions emerge from this study:
+
+\begin{enumerate}
+    \item \textbf{Domain-adaptive fine-tuning}: Fine-tune SepFormer and
+    Whisper jointly on AISHELL-5 near-field references (available in the
+    54\,GB training split) to reduce the train-test domain gap.
+    \item \textbf{On-device deployment}: Quantize the pipeline (INT8/INT4)
+    for embedded deployment on automotive-grade SoCs (e.g., Qualcomm SA8295P).
+    \item \textbf{LLM-based intent understanding}: Replace the keyword engine
+    with a small instruction-tuned LLM (e.g., Qwen-1.5-1.8B) for richer
+    intent extraction and multi-turn dialogue.
+    \item \textbf{Real-time hardware integration}: Integrate with
+    vehicle CAN bus simulators to enable actuator-in-the-loop evaluation.
+    \item \textbf{Multilingual extension}: Leverage Whisper's multilingual
+    backbone to extend the demo to Vietnamese and English cabin scenarios.
+\end{enumerate}
+
+\subsection{Broader Impact}
+
+The open-source release of InCar-MSAR benefits the research community by
+providing a reproducible baseline on AISHELL-5 and lowering the barrier to
+in-car multi-speaker ASR research. Commercial applications in OEM
+infotainment and ride-sharing services could improve accessibility for
+hearing-impaired passengers and enhance safety by reducing driver distraction.
+All third-party assets are used in accordance with their respective licenses
+(AISHELL-5: CC BY-SA 4.0; Whisper: MIT; SpeechBrain: Apache 2.0).

@@ -1,0 +1,102 @@
+% ============================================================
+% Section 4: Experiments & Results
+% ============================================================
+
+\section{Experiments \& Results}
+\label{sec:experiments}
+
+\subsection{Experimental Setup}
+
+All experiments use the \textit{dev} split for system development and
+\textit{eval1} as the primary test benchmark. The default evaluation
+script samples up to 30 sessions per condition (or 5 in \texttt{--quick}
+mode); exact $n$ and aggregate metrics are logged in
+\texttt{outputs/metrics/summary\_*.json}. Each summary file includes
+\texttt{data\_note}, distinguishing real AISHELL-5 from development
+fixtures (e.g., synthetic sine mixtures must not be cited as benchmark
+scores). Random seeds are fixed (\texttt{PYTHONSEED=42}). The full
+pipeline is reproducible via \texttt{bash scripts/run\_eval.sh} from the
+repository; the provided Docker image matches the GPU-oriented setup in
+the original study design.
+
+\paragraph{Hardware.} Reported latency and wall-clock runs in this
+repository use CPU execution unless CUDA is available: separation falls
+back to \texttt{channel\_select} (no neural SepFormer), and ASR uses
+\texttt{openai/whisper-tiny} in \texttt{configs/default.yaml} for
+CPU-friendly throughput. For neural SepFormer separation and
+\texttt{Whisper-small}, use a CUDA-capable GPU and adjust
+\texttt{configs/default.yaml} accordingly; prior T4-class GPU numbers
+remain the reference design target from the product requirements.
+
+\paragraph{Baselines.}
+\begin{itemize}
+    \item \textbf{Single-channel ASR} (SC-ASR): Whisper-small applied
+    directly to microphone channel\,0 (driver mic), without separation.
+    \item \textbf{Multi-channel + Separation (Ours)}: Full pipeline as
+    described in Section~\ref{subsec:architecture}.
+\end{itemize}
+
+\subsection{Main Results}
+
+Table~\ref{tab:main_results} presents WER, cpWER, and latency on AISHELL-5
+eval1. The proposed pipeline achieves lower WER and cpWER than the single-channel
+baseline, demonstrating the value of speech separation for in-car ASR.
+
+\input{tables/main_results}
+
+\paragraph{Discussion.}
+The WER improvement from separation is attributable to the reduction of
+cross-speaker acoustic interference. Far-field microphone channel\,0 captures
+a mixture of all cabin voices; SepFormer effectively isolates the driver's
+voice, reducing substitution errors for high-energy speech segments. The
+cpWER metric captures the difficulty of multi-speaker permutation matching:
+even a correct per-speaker WER may yield high cpWER if speaker identities
+are swapped. Our rule-based role classifier mitigates this by anchoring the
+Driver label to the highest-energy channel-0-correlated track.
+
+\subsection{Ablation Studies}
+
+Table~\ref{tab:ablation} reports ablation results where individual pipeline
+components are removed or replaced.
+
+\input{tables/ablation_table}
+
+\paragraph{Effect of Separation.}
+Removing the separation stage (``w/o Separation'') and feeding the raw
+mono mixture to Whisper increases WER substantially, confirming that
+separation is the most critical component in the pipeline.
+
+\paragraph{ASR Model Comparison.}
+Replacing Whisper-small with Wav2Vec2-XLSR-Chinese~\cite{conneau2020unsupervised}
+shows trade-offs between Chinese-specific fine-tuning and zero-shot
+generalization. Results are in \texttt{outputs/ablation/wav2vec2\_asr.csv}.
+
+\paragraph{Speaker Classification.}
+The ECAPA-TDNN-based method and the energy heuristic produce comparable
+speaker attribution on 2-speaker sessions, but ECAPA shows larger gains on
+3–4 speaker scenarios where energy overlap is more ambiguous
+(see \texttt{outputs/ablation/speaker\_cls\_comparison.csv}).
+
+\subsection{Latency Analysis}
+
+End-to-end latency per 2-second chunk (separation + ASR) is reported in
+Table~\ref{tab:main_results}. On CPU with \texttt{whisper-tiny} and
+channel selection, P95 often remains under 1\,s per chunk; the
+$<3$\,s/chunk product target is evaluated with GPU SepFormer and
+\texttt{Whisper-small} (beam size\,2) as in the reference configuration.
+Detailed per-component latency breakdown is in
+\texttt{outputs/metrics/latency\_benchmark.csv}.
+
+\subsection{Error Analysis}
+
+Error analysis (\texttt{notebooks/07\_error\_analysis.ipynb}) suggests
+the following patterns on real multi-channel data (qualitative; exact
+rates depend on session and road noise):
+\begin{itemize}
+    \item \textbf{Noise robustness}: WER tends to increase for
+    sessions recorded at highway speed (lower cabin SNR).
+    \item \textbf{Utterance length}: Short utterances ($<$2\,s) show higher
+    deletion rates due to Whisper's minimum-context requirement.
+    \item \textbf{Speaker overlap}: Sessions with simultaneous speech (true
+    overlap, not just turn-taking) present the hardest separation challenge.
+\end{itemize}

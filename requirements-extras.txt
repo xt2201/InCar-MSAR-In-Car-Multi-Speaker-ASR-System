@@ -1,0 +1,4 @@
+# Optional: ConvTasNet backend (asteroid). Install if you need --model convtasnet.
+# On some macOS environments, dependency resolution may try to build `pesq`; use a conda env or skip if not needed.
+asteroid==0.6.0
+asteroid-filterbanks==0.4.0

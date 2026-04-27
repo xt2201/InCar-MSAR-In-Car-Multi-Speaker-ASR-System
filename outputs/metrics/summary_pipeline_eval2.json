@@ -1,0 +1,30 @@
+{
+  "wer": {
+    "mean": 1.0,
+    "median": 1.0,
+    "std": 0.0,
+    "min": 1.0,
+    "max": 1.0,
+    "n": 10
+  },
+  "cpwer": {
+    "mean": 1.0,
+    "median": 1.0,
+    "std": 0.0,
+    "min": 1.0,
+    "max": 1.0,
+    "n": 5
+  },
+  "latency": {
+    "mean_ms": 238.7,
+    "p95_ms": 240.1,
+    "median_ms": 238.9,
+    "n": 5,
+    "n_for_latency_stats": 4,
+    "dropped_warmup": 1
+  },
+  "mode": "pipeline",
+  "split": "eval2",
+  "n_samples": 5,
+  "data_note": "synthetic_sine_mixture"
+}

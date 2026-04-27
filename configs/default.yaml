@@ -1,0 +1,101 @@
+# ============================================================
+# In-Car Multi-Speaker ASR - Default Configuration
+# ============================================================
+# Load via: from src.utils.config import load_config
+# Devices: "auto" = cuda if available, else cpu (recommended)
+
+# -----------------------------------------------------------
+# Audio processing
+# -----------------------------------------------------------
+audio:
+  sample_rate: 16000          # Hz – AISHELL-5 standard
+  n_channels: 4               # Number of microphone channels
+  chunk_size_sec: 2.0         # Chunk duration for streaming (seconds)
+  chunk_overlap_sec: 0.2      # Overlap between chunks (overlap-add)
+  min_duration_sec: 1.0       # Minimum utterance length to process
+
+# -----------------------------------------------------------
+# Speech Separation
+# -----------------------------------------------------------
+separation:
+  model: "sepformer-wsj02mix"           # Used only when GPU available
+  model_hub: "speechbrain/sepformer-wsj02mix"
+  n_speakers: 2               # Default number of speakers to separate
+  max_speakers: 4             # Maximum supported speakers
+  device: "auto"              # "auto" = cuda if available, else cpu
+  si_snri_threshold: 3.0      # Fallback to direct ASR if SI-SNRi below threshold (dB)
+  use_chunked: true           # Enable chunk-based streaming separation
+  # CPU fallback method (used automatically when no GPU):
+  # "channel_select" – instant, zero-ML, picks top-N energy channels
+  # "ica"            – FastICA blind source separation (~1-5s/session on CPU)
+  # "sepformer"      – full neural separation (requires GPU for real-time)
+  cpu_fallback_method: "channel_select"
+
+# -----------------------------------------------------------
+# ASR (Automatic Speech Recognition)
+# -----------------------------------------------------------
+asr:
+  # CPU-friendly default. For GPU, use "openai/whisper-small" or larger.
+  model: "openai/whisper-tiny"
+  language: "zh"              # Mandarin Chinese
+  task: "transcribe"
+  device: "auto"              # "auto" = cuda if available, else cpu
+  beam_size: 1                # 1 = greedy (fastest). Use 2-4 with GPU for better WER.
+  batch_size: 1
+  max_new_tokens: 224         # Max output tokens (224 = whisper-tiny limit)
+  return_timestamps: false    # Disable for speed in demo mode
+
+# -----------------------------------------------------------
+# Speaker Role Classification
+# -----------------------------------------------------------
+speaker:
+  method: "rule"              # "rule" (CPU-friendly, instant), "ecapa", or "hybrid"
+  ecapa_model: "speechbrain/spkrec-ecapa-voxceleb"
+  embedding_dim: 192
+  cosine_threshold: 0.7       # Same-speaker cosine similarity threshold
+  # Channel-to-seat mapping (AISHELL-5 specific)
+  # Channel index (0-based) -> seat role
+  channel_seat_map:
+    0: "driver"
+    1: "passenger_front"
+    2: "passenger_rear_left"
+    3: "passenger_rear_right"
+  driver_channel: 0           # Which channel is closest to driver seat
+
+# -----------------------------------------------------------
+# Intent Engine
+# -----------------------------------------------------------
+intent:
+  keyword_config: "configs/intent_keywords.yaml"
+  unknown_threshold: 0.0      # Rule-based: always match or unknown
+  output_schema_version: "1.0"
+
+# -----------------------------------------------------------
+# Evaluation
+# -----------------------------------------------------------
+evaluation:
+  dev_dir: "data/dev"
+  eval1_dir: "data/eval1"
+  eval2_dir: "data/eval2"
+  quick_eval_n: 10
+  baseline_eval_n: 30
+  full_eval_n: -1             # -1 = all available samples
+  compute_wer: true
+  compute_cpwer: true
+  compute_speaker_acc: true
+  compute_latency: true
+  seed: 42
+
+# -----------------------------------------------------------
+# Paths
+# -----------------------------------------------------------
+paths:
+  data_root: "data"
+  output_root: "outputs"
+  metrics_dir: "outputs/metrics"
+  figures_dir: "outputs/figures"
+  tables_dir: "outputs/tables"
+  separation_dir: "outputs/separation"
+  ablation_dir: "outputs/ablation"
+  log_file: "outputs/run.log"
+  error_log: "outputs/errors.log"
