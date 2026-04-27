@@ -39,15 +39,47 @@ if [[ -z "${HF_TOKEN:-}" ]]; then
 fi
 
 log_info "Uploading to HuggingFace xt2201/InCar-MSAR (path: noise/) - this may take a long time..."
-: "${PYTHON:=python3}"
-if ! command -v "${PYTHON}" &>/dev/null; then
-  log_error "Python not found. Set PYTHON=/path/to/venv/bin/python3"
+
+# Resolve Python: $PYTHON, then project .venv, then venv, then system python3
+: "${PYTHON:=}"
+if [[ -z "${PYTHON}" ]]; then
+  if [[ -x "${PROJECT_ROOT}/.venv/bin/python3" ]]; then
+    PYTHON="${PROJECT_ROOT}/.venv/bin/python3"
+  elif [[ -x "${PROJECT_ROOT}/.venv/bin/python" ]]; then
+    PYTHON="${PROJECT_ROOT}/.venv/bin/python"
+  elif [[ -x "${PROJECT_ROOT}/venv/bin/python3" ]]; then
+    PYTHON="${PROJECT_ROOT}/venv/bin/python3"
+  else
+    PYTHON="python3"
+  fi
+fi
+if [[ -x "${PYTHON}" ]]; then
+  :
+elif command -v "${PYTHON}" &>/dev/null; then
+  PYTHON="$(command -v "${PYTHON}")"
+else
+  log_error "Python not found: ${PYTHON}. Set PYTHON=/path/to/python3 or create .venv in project root."
   exit 1
 fi
-if ! "${PYTHON}" -c "import huggingface_hub" 2>/dev/null; then
-  log_error "Missing huggingface_hub. Install: pip install -r requirements.txt"
-  exit 1
-fi
+
+ensure_huggingface_hub() {
+  if "${PYTHON}" -c "import huggingface_hub" 2>/dev/null; then
+    return 0
+  fi
+  log_warn "huggingface_hub not in this environment; using project .venv (one-time setup)."
+  local vpy="${PROJECT_ROOT}/.venv/bin/python3"
+  if [[ ! -x "${vpy}" ]]; then
+    log_info "Creating ${PROJECT_ROOT}/.venv..."
+    python3 -m venv "${PROJECT_ROOT}/.venv"
+  fi
+  "${PROJECT_ROOT}/.venv/bin/pip" install -q "pip>=24" "huggingface-hub>=0.20.0"
+  PYTHON="${vpy}"
+  if ! "${PYTHON}" -c "import huggingface_hub" 2>/dev/null; then
+    log_error "Could not import huggingface_hub after .venv install. Run: ${PROJECT_ROOT}/.venv/bin/pip install huggingface-hub"
+    exit 1
+  fi
+}
+ensure_huggingface_hub
 export HF_TOKEN
 export NOISE_DIR
 "${PYTHON}" - <<'PY'

@@ -118,6 +118,7 @@ bash scripts/download_data.sh --all --openslr-only
 # Environmental noise (large; mirrored on HuggingFace like other splits)
 bash scripts/download_data.sh --noise
 # (Maintainers) upload local data/noise to the HF dataset after OpenSLR download
+# First run auto-creates .venv/ and installs huggingface-hub if missing.
 bash scripts/upload_noise_to_hf.sh
 ```
 
