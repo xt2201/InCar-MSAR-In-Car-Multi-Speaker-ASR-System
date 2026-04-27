@@ -19,6 +19,33 @@ from typing import Iterator, Optional
 from loguru import logger
 
 
+def _resolve_materialized_subdirs(data_dir: Path) -> tuple[Path, Path]:
+    """Return (wav_dir, text_dir) for materialized splits.
+
+    Prefer ``wav/`` and ``text/``. On case-sensitive filesystems (e.g. Linux/WSL),
+    also accept ``WAV/``, ``TEXT/`` if present.
+    """
+    data_dir = data_dir.resolve()
+    wav: Path | None = None
+    for name in ("wav", "WAV", "Wav"):
+        w = data_dir / name
+        if w.is_dir():
+            wav = w
+            break
+    if wav is None:
+        return data_dir / "wav", data_dir / "text"
+
+    text: Path | None = None
+    for name in ("text", "TEXT", "Text"):
+        t = data_dir / name
+        if t.is_dir():
+            text = t
+            break
+    if text is None:
+        text = data_dir / "text"
+    return wav, text
+
+
 @dataclass
 class Sample:
     """A single recording sample from AISHELL-5.
@@ -63,14 +90,24 @@ class AISHELL5Loader:
         data_dir: str | Path,
         max_samples: Optional[int] = None,
     ) -> None:
-        self.data_dir = Path(data_dir)
+        self.data_dir = Path(data_dir).resolve()
         self.max_samples = max_samples
 
-        self.wav_dir = self.data_dir / "wav"
-        self.text_dir = self.data_dir / "text"
+        self.wav_dir, self.text_dir = _resolve_materialized_subdirs(self.data_dir)
 
-        if not self.wav_dir.exists():
-            raise FileNotFoundError(f"WAV directory not found: {self.wav_dir}")
+        if not self.wav_dir.is_dir():
+            try:
+                have = (
+                    [p.name for p in self.data_dir.iterdir() if p.is_dir()]
+                    if self.data_dir.is_dir()
+                    else []
+                )
+            except OSError:
+                have = []
+            msg = f"WAV directory not found: {self.wav_dir}"
+            if have:
+                msg += f" (subdirs here: {have})"
+            raise FileNotFoundError(msg)
 
         self._samples: list[Sample] = []
         self._load_samples()

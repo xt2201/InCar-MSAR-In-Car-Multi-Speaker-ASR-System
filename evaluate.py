@@ -28,6 +28,10 @@ from src.evaluation.metrics import (
 )
 from src.utils.config import load_config
 
+# Anchor relative paths in config/CLI to the repository root (directory of this file),
+# not the process CWD — reliable on WSL/CI and when invoking from another directory.
+REPO_ROOT = Path(__file__).resolve().parent
+
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Evaluate InCar ASR Pipeline")
@@ -105,11 +109,17 @@ def evaluate(args: argparse.Namespace) -> None:
     import random
     random.seed(args.seed)
 
-    cfg = load_config(args.config)
+    config_path = Path(args.config)
+    if not config_path.is_absolute():
+        config_path = (REPO_ROOT / config_path).resolve()
+    cfg = load_config(config_path)
 
-    # Resolve data directory
-    data_dir = Path(cfg.paths.data_root) / args.split
-    if not data_dir.exists():
+    # Resolve data directory (relative to repo root, not CWD)
+    data_root = Path(cfg.paths.data_root)
+    if not data_root.is_absolute():
+        data_root = (REPO_ROOT / data_root).resolve()
+    data_dir = (data_root / args.split).resolve()
+    if not data_dir.is_dir():
         logger.error(f"Data directory not found: {data_dir}")
         logger.info(f"Run: bash scripts/download_data.sh --{args.split}")
         raise SystemExit(1)
@@ -120,9 +130,11 @@ def evaluate(args: argparse.Namespace) -> None:
     logger.info(f"Evaluating on {len(loader)} samples from {args.split} set")
 
     # Initialize pipeline
-    pipeline = InCarASRPipeline(args.config)
+    pipeline = InCarASRPipeline(str(config_path))
 
     output_dir = Path(args.output_dir)
+    if not output_dir.is_absolute():
+        output_dir = (REPO_ROOT / output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     output_csv = output_dir / f"wer_{args.mode}_{args.split}.csv"
 
