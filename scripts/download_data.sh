@@ -124,21 +124,24 @@ hf_download_split() {
   if [[ -n "$HF_TOKEN" ]]; then
     log_blue "Trying HuggingFace: ${HF_REPO} → ${split}/"
     python - <<PYEOF 2>/dev/null && return 0 || true
-from huggingface_hub import hf_hub_download, list_repo_files, snapshot_download
-import os, shutil
+from huggingface_hub import snapshot_download
+import os
 token = "${HF_TOKEN}"
 repo = "${HF_REPO}"
-dest = "${dest_dir}"
-os.makedirs(dest, exist_ok=True)
+# Use dataset root (not split subfolder) so paths like dev/wav/ land under data/dev/wav/
+data_root = r"""${DATA_DIR}"""
+dest = r"""${dest_dir}"""
+split = "${split}"
+os.makedirs(data_root, exist_ok=True)
 try:
     local = snapshot_download(
         repo_id=repo,
         repo_type="dataset",
-        local_dir=dest,
-        allow_patterns=["${split}/**"],
+        local_dir=data_root,
+        allow_patterns=[f"{split}/**"],
         token=token,
     )
-    print(f"[HF] Downloaded {local}")
+    print(f"[HF] Downloaded {local} -> {dest}")
 except Exception as e:
     print(f"[HF] Failed: {e}")
     raise
@@ -204,6 +207,14 @@ openslr_download_split() {
     tar -xzf "${dest_tar}" -C "${raw_dir}" 2>/dev/null
   rm -f "${dest_tar}"
 
+  # Noise: no TextGrid; keep OpenSLR session tree as-is
+  if [[ "${split}" == "noise" ]]; then
+    log_warn "Noise split: no transcripts. Keeping raw session wav files."
+    rm -rf "${dest_dir}" 2>/dev/null || true
+    mv "${raw_dir}" "${dest_dir}"
+    return 0
+  fi
+
   # Materialize: stack DX01-04 → 4-ch wav + TextGrid → text/
   log_info "Materializing ${split}: ${raw_dir} → ${dest_dir}"
   python "${SCRIPT_DIR}/materialize_aishell5_flat.py" \
@@ -211,16 +222,6 @@ openslr_download_split() {
     --dest   "${dest_dir}" \
     --label  "${split}"
 
-  # If noise (no TextGrid), just move wav structure as-is
-  if [[ "${split}" == "noise" ]]; then
-    # noise has no transcripts — skip materialize, just link as-is
-    log_warn "Noise split: no transcripts. Raw session wav files kept at ${raw_dir}"
-    rm -rf "${dest_dir}" 2>/dev/null || true
-    mv "${raw_dir}" "${dest_dir}"
-    return 0
-  fi
-
-  # Remove staging dir after successful materialize
   rm -rf "${raw_dir}"
   log_info "✓ ${split} ready: ${dest_dir}/wav + ${dest_dir}/text"
 }

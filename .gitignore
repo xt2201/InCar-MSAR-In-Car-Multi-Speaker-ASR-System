@@ -33,6 +33,7 @@ build/
 *.safetensors
 
 # Output artifacts (keep structure, not data)
+outputs/*.log
 outputs/metrics/*.csv
 outputs/figures/*.png
 outputs/figures/*.pdf

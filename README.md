@@ -114,6 +114,11 @@ bash scripts/download_data.sh --noise   # ~12 GB, for augmentation
 # Force one source
 bash scripts/download_data.sh --all --hf-only
 bash scripts/download_data.sh --all --openslr-only
+
+# Environmental noise (large; mirrored on HuggingFace like other splits)
+bash scripts/download_data.sh --noise
+# (Maintainers) upload local data/noise to the HF dataset after OpenSLR download
+bash scripts/upload_noise_to_hf.sh
 ```
 
 **License**: CC BY-SA 4.0 — Attribution required. See [NOTICES.md](NOTICES.md).
